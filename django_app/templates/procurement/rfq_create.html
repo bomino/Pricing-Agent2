@@ -1,0 +1,579 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Create RFQ - AI Pricing Agent{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <div class="flex items-center text-sm text-gray-600 mb-2">
+            <a href="{% url 'procurement:rfq_list' %}" class="hover:text-navy-600">RFQs</a>
+            <i class="fas fa-chevron-right mx-2 text-xs"></i>
+            <span>Create New RFQ</span>
+        </div>
+        <h1 class="text-3xl font-bold text-gray-900">Create Request for Quote</h1>
+        <p class="text-gray-600 mt-1">Request quotes from suppliers for materials and services</p>
+    </div>
+    
+    <!-- Progress Indicator -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center flex-1">
+                <div class="step-indicator active" data-step="1">
+                    <div class="step-number">1</div>
+                    <div class="step-label">Basic Information</div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-indicator" data-step="2">
+                    <div class="step-number">2</div>
+                    <div class="step-label">Items & Specifications</div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-indicator" data-step="3">
+                    <div class="step-number">3</div>
+                    <div class="step-label">Select Suppliers</div>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-indicator" data-step="4">
+                    <div class="step-number">4</div>
+                    <div class="step-label">Review & Submit</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <form id="rfq-form" method="post" action="{% url 'procurement:rfq_create' %}" class="space-y-6">
+        {% csrf_token %}
+        
+        <!-- Step 1: Basic Information -->
+        <div class="step-content" id="step-1">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-6">Basic Information</h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- RFQ Title -->
+                    <div class="lg:col-span-2">
+                        <label for="title" class="block text-sm font-medium text-gray-700 mb-2">
+                            RFQ Title <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" 
+                               id="title" 
+                               name="title" 
+                               required
+                               class="form-input w-full"
+                               placeholder="Enter a descriptive title for this RFQ">
+                    </div>
+                    
+                    <!-- Category -->
+                    <div>
+                        <label for="category" class="block text-sm font-medium text-gray-700 mb-2">
+                            Category <span class="text-red-500">*</span>
+                        </label>
+                        <select id="category" name="category" required class="form-input w-full">
+                            <option value="">Select Category</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Priority -->
+                    <div>
+                        <label for="priority" class="block text-sm font-medium text-gray-700 mb-2">
+                            Priority <span class="text-red-500">*</span>
+                        </label>
+                        <select id="priority" name="priority" required class="form-input w-full">
+                            <option value="low">Low Priority</option>
+                            <option value="medium" selected>Medium Priority</option>
+                            <option value="high">High Priority</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Deadline -->
+                    <div>
+                        <label for="deadline" class="block text-sm font-medium text-gray-700 mb-2">
+                            Response Deadline <span class="text-red-500">*</span>
+                        </label>
+                        <input type="datetime-local" 
+                               id="deadline" 
+                               name="deadline" 
+                               required
+                               class="form-input w-full"
+                               min="{{ min_deadline }}">
+                    </div>
+                    
+                    <!-- Delivery Date -->
+                    <div>
+                        <label for="delivery_date" class="block text-sm font-medium text-gray-700 mb-2">
+                            Required Delivery Date <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" 
+                               id="delivery_date" 
+                               name="delivery_date" 
+                               required
+                               class="form-input w-full">
+                    </div>
+                    
+                    <!-- Description -->
+                    <div class="lg:col-span-2">
+                        <label for="description" class="block text-sm font-medium text-gray-700 mb-2">
+                            Description
+                        </label>
+                        <textarea id="description" 
+                                  name="description" 
+                                  rows="4"
+                                  class="form-input w-full"
+                                  placeholder="Provide detailed requirements and specifications..."></textarea>
+                    </div>
+                    
+                    <!-- Terms & Conditions -->
+                    <div class="lg:col-span-2">
+                        <label for="terms" class="block text-sm font-medium text-gray-700 mb-2">
+                            Terms & Conditions
+                        </label>
+                        <div class="border border-gray-300 rounded-lg">
+                            <div class="p-2 border-b border-gray-300 bg-gray-50">
+                                <button type="button" onclick="formatText('bold')" class="p-2 hover:bg-gray-200 rounded">
+                                    <i class="fas fa-bold"></i>
+                                </button>
+                                <button type="button" onclick="formatText('italic')" class="p-2 hover:bg-gray-200 rounded">
+                                    <i class="fas fa-italic"></i>
+                                </button>
+                                <button type="button" onclick="formatText('list')" class="p-2 hover:bg-gray-200 rounded">
+                                    <i class="fas fa-list-ul"></i>
+                                </button>
+                            </div>
+                            <textarea id="terms" 
+                                      name="terms" 
+                                      rows="6"
+                                      class="w-full p-3 focus:outline-none"
+                                      placeholder="Enter terms and conditions...">{{ default_terms|default:"" }}</textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-end">
+                    <button type="button" onclick="nextStep()" class="btn btn-primary">
+                        Next: Items & Specifications <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Step 2: Items & Specifications -->
+        <div class="step-content hidden" id="step-2">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-6">Items & Specifications</h2>
+                
+                <!-- Add Item Button -->
+                <div class="mb-4 flex justify-between items-center">
+                    <p class="text-sm text-gray-600">Add materials and items you want to procure</p>
+                    <button type="button" onclick="addItem()" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-plus mr-1"></i> Add Item
+                    </button>
+                </div>
+                
+                <!-- Items Table -->
+                <div class="overflow-x-auto">
+                    <table class="min-w-full" id="items-table">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Item/Material</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Specification</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Quantity</th>
+                                <th class="px-4 py-3 text-left text-sm font-medium text-gray-700">Unit</th>
+                                <th class="px-4 py-3 text-center text-sm font-medium text-gray-700">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="items-tbody">
+                            <tr class="item-row">
+                                <td class="px-4 py-3">
+                                    <input type="text" name="item_name[]" required class="form-input w-full" placeholder="Item name">
+                                </td>
+                                <td class="px-4 py-3">
+                                    <input type="text" name="item_spec[]" class="form-input w-full" placeholder="Specifications">
+                                </td>
+                                <td class="px-4 py-3">
+                                    <input type="number" name="item_quantity[]" required min="1" class="form-input w-full" placeholder="Qty">
+                                </td>
+                                <td class="px-4 py-3">
+                                    <select name="item_unit[]" required class="form-input w-full">
+                                        <option value="pcs">Pieces</option>
+                                        <option value="kg">Kilogram</option>
+                                        <option value="ton">Ton</option>
+                                        <option value="m">Meter</option>
+                                        <option value="m2">Square Meter</option>
+                                        <option value="m3">Cubic Meter</option>
+                                        <option value="ltr">Liter</option>
+                                        <option value="box">Box</option>
+                                    </select>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <button type="button" onclick="removeItem(this)" class="text-red-600 hover:text-red-800">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Attachments -->
+                <div class="mt-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Attachments (Technical drawings, specifications, etc.)
+                    </label>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-navy-400 transition-colors">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+                        <p class="text-sm text-gray-600 mb-2">Drag and drop files here or click to browse</p>
+                        <input type="file" name="attachments" multiple class="hidden" id="file-upload">
+                        <button type="button" onclick="document.getElementById('file-upload').click()" 
+                                class="btn btn-sm btn-outline">
+                            Choose Files
+                        </button>
+                        <p class="text-xs text-gray-500 mt-2">PDF, DOC, DOCX, XLS, XLSX up to 10MB each</p>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-between">
+                    <button type="button" onclick="previousStep()" class="btn btn-outline">
+                        <i class="fas fa-arrow-left mr-2"></i> Previous
+                    </button>
+                    <button type="button" onclick="nextStep()" class="btn btn-primary">
+                        Next: Select Suppliers <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Step 3: Select Suppliers -->
+        <div class="step-content hidden" id="step-3">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-6">Select Suppliers</h2>
+                
+                <!-- AI Recommendations -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <div class="flex items-start">
+                        <i class="fas fa-robot text-blue-600 mt-1 mr-3"></i>
+                        <div>
+                            <h3 class="font-medium text-blue-900 mb-1">AI Recommendations</h3>
+                            <p class="text-sm text-blue-700">Based on your requirements, we recommend these suppliers for optimal pricing and reliability.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Supplier Search -->
+                <div class="mb-4">
+                    <input type="text" 
+                           placeholder="Search suppliers by name, category, or location..." 
+                           class="form-input w-full"
+                           onkeyup="filterSuppliers(this.value)">
+                </div>
+                
+                <!-- Suppliers Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" id="suppliers-grid">
+                    {% for supplier in suppliers %}
+                    <div class="supplier-card border rounded-lg p-4 hover:border-navy-400 transition-colors cursor-pointer"
+                         onclick="toggleSupplier(this, {{ supplier.id }})">
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-start">
+                                <input type="checkbox" 
+                                       name="suppliers[]" 
+                                       value="{{ supplier.id }}"
+                                       class="form-checkbox mt-1 mr-3"
+                                       onclick="event.stopPropagation()">
+                                <div>
+                                    <h4 class="font-medium text-gray-900">{{ supplier.name }}</h4>
+                                    <p class="text-sm text-gray-600 mt-1">{{ supplier.category }}</p>
+                                    <div class="flex items-center mt-2 space-x-4 text-xs text-gray-500">
+                                        <span><i class="fas fa-star text-yellow-500"></i> {{ supplier.rating|default:"4.5" }}</span>
+                                        <span><i class="fas fa-truck"></i> {{ supplier.lead_time|default:"3-5" }} days</span>
+                                        <span><i class="fas fa-percentage"></i> {{ supplier.success_rate|default:"95" }}% success</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% if supplier.is_preferred %}
+                            <span class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                                Preferred
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="mt-6 flex justify-between">
+                    <button type="button" onclick="previousStep()" class="btn btn-outline">
+                        <i class="fas fa-arrow-left mr-2"></i> Previous
+                    </button>
+                    <button type="button" onclick="nextStep()" class="btn btn-primary">
+                        Next: Review & Submit <i class="fas fa-arrow-right ml-2"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Step 4: Review & Submit -->
+        <div class="step-content hidden" id="step-4">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-6">Review & Submit</h2>
+                
+                <!-- Summary -->
+                <div class="space-y-6">
+                    <!-- Basic Info Summary -->
+                    <div>
+                        <h3 class="font-medium text-gray-900 mb-3">Basic Information</h3>
+                        <dl class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <dt class="text-gray-500">Title:</dt>
+                                <dd class="font-medium" id="review-title">-</dd>
+                            </div>
+                            <div>
+                                <dt class="text-gray-500">Category:</dt>
+                                <dd class="font-medium" id="review-category">-</dd>
+                            </div>
+                            <div>
+                                <dt class="text-gray-500">Priority:</dt>
+                                <dd class="font-medium" id="review-priority">-</dd>
+                            </div>
+                            <div>
+                                <dt class="text-gray-500">Deadline:</dt>
+                                <dd class="font-medium" id="review-deadline">-</dd>
+                            </div>
+                        </dl>
+                    </div>
+                    
+                    <!-- Items Summary -->
+                    <div>
+                        <h3 class="font-medium text-gray-900 mb-3">Items</h3>
+                        <div id="review-items" class="text-sm space-y-1">
+                            <!-- Items will be populated here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Suppliers Summary -->
+                    <div>
+                        <h3 class="font-medium text-gray-900 mb-3">Selected Suppliers</h3>
+                        <div id="review-suppliers" class="flex flex-wrap gap-2">
+                            <!-- Suppliers will be populated here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Submit Options -->
+                <div class="mt-8 p-4 bg-gray-50 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="save_as_draft" class="form-checkbox mr-2">
+                                <span class="text-sm text-gray-700">Save as draft (don't send to suppliers yet)</span>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="send_notification" checked class="form-checkbox mr-2">
+                                <span class="text-sm text-gray-700">Send email notifications to suppliers</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-between">
+                    <button type="button" onclick="previousStep()" class="btn btn-outline">
+                        <i class="fas fa-arrow-left mr-2"></i> Previous
+                    </button>
+                    <div class="space-x-3">
+                        <button type="submit" name="action" value="draft" class="btn btn-secondary">
+                            <i class="fas fa-save mr-2"></i> Save as Draft
+                        </button>
+                        <button type="submit" name="action" value="publish" class="btn btn-primary">
+                            <i class="fas fa-paper-plane mr-2"></i> Publish RFQ
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+.step-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.step-indicator.active .step-number {
+    background: #1e3a8a;
+    color: white;
+}
+
+.step-indicator.completed .step-number {
+    background: #10b981;
+    color: white;
+}
+
+.step-label {
+    font-size: 0.875rem;
+    color: #6b7280;
+    text-align: center;
+}
+
+.step-indicator.active .step-label {
+    color: #1e3a8a;
+    font-weight: 600;
+}
+
+.step-connector {
+    flex: 1;
+    height: 2px;
+    background: #e5e7eb;
+    margin: 0 1rem;
+    margin-top: -28px;
+}
+
+.supplier-card.selected {
+    border-color: #1e3a8a;
+    background: #f0f4f8;
+}
+</style>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+let currentStep = 1;
+const totalSteps = 4;
+
+function nextStep() {
+    if (currentStep < totalSteps) {
+        // Validate current step
+        if (!validateStep(currentStep)) {
+            return;
+        }
+        
+        // Hide current step
+        document.getElementById(`step-${currentStep}`).classList.add('hidden');
+        
+        // Mark current step as completed
+        document.querySelector(`[data-step="${currentStep}"]`).classList.remove('active');
+        document.querySelector(`[data-step="${currentStep}"]`).classList.add('completed');
+        
+        // Move to next step
+        currentStep++;
+        
+        // Show next step
+        document.getElementById(`step-${currentStep}`).classList.remove('hidden');
+        document.querySelector(`[data-step="${currentStep}"]`).classList.add('active');
+        
+        // Update review if on last step
+        if (currentStep === 4) {
+            updateReview();
+        }
+    }
+}
+
+function previousStep() {
+    if (currentStep > 1) {
+        // Hide current step
+        document.getElementById(`step-${currentStep}`).classList.add('hidden');
+        document.querySelector(`[data-step="${currentStep}"]`).classList.remove('active');
+        
+        // Move to previous step
+        currentStep--;
+        
+        // Show previous step
+        document.getElementById(`step-${currentStep}`).classList.remove('hidden');
+        document.querySelector(`[data-step="${currentStep}"]`).classList.add('active');
+    }
+}
+
+function validateStep(step) {
+    // Add validation logic for each step
+    return true;
+}
+
+function addItem() {
+    const tbody = document.getElementById('items-tbody');
+    const newRow = document.querySelector('.item-row').cloneNode(true);
+    
+    // Clear values in the new row
+    newRow.querySelectorAll('input').forEach(input => input.value = '');
+    
+    tbody.appendChild(newRow);
+}
+
+function removeItem(button) {
+    const row = button.closest('tr');
+    if (document.querySelectorAll('.item-row').length > 1) {
+        row.remove();
+    }
+}
+
+function toggleSupplier(card, supplierId) {
+    const checkbox = card.querySelector('input[type="checkbox"]');
+    checkbox.checked = !checkbox.checked;
+    card.classList.toggle('selected');
+}
+
+function filterSuppliers(searchTerm) {
+    const cards = document.querySelectorAll('.supplier-card');
+    cards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        if (text.includes(searchTerm.toLowerCase())) {
+            card.style.display = 'block';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function updateReview() {
+    // Update basic info
+    document.getElementById('review-title').textContent = document.getElementById('title').value;
+    document.getElementById('review-category').textContent = document.getElementById('category').selectedOptions[0].text;
+    document.getElementById('review-priority').textContent = document.getElementById('priority').selectedOptions[0].text;
+    document.getElementById('review-deadline').textContent = new Date(document.getElementById('deadline').value).toLocaleString();
+    
+    // Update items
+    const itemsContainer = document.getElementById('review-items');
+    itemsContainer.innerHTML = '';
+    document.querySelectorAll('.item-row').forEach(row => {
+        const name = row.querySelector('[name="item_name[]"]').value;
+        const quantity = row.querySelector('[name="item_quantity[]"]').value;
+        const unit = row.querySelector('[name="item_unit[]"]').value;
+        if (name) {
+            itemsContainer.innerHTML += `<div>• ${name} - ${quantity} ${unit}</div>`;
+        }
+    });
+    
+    // Update suppliers
+    const suppliersContainer = document.getElementById('review-suppliers');
+    suppliersContainer.innerHTML = '';
+    document.querySelectorAll('.supplier-card input:checked').forEach(checkbox => {
+        const supplierName = checkbox.closest('.supplier-card').querySelector('h4').textContent;
+        suppliersContainer.innerHTML += `<span class="px-3 py-1 bg-navy-100 text-navy-800 rounded-full text-sm">${supplierName}</span>`;
+    });
+}
+
+function formatText(command) {
+    // Implement text formatting for terms field
+    const termsField = document.getElementById('terms');
+    // Add formatting logic here
+}
+</script>
+{% endblock %}

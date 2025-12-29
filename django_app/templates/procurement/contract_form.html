@@ -1,0 +1,418 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% if form.instance.pk %}Edit{% else %}Create{% endif %} Contract{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .navy-gradient {
+        background: linear-gradient(135deg, #243b53 0%, #334e68 100%);
+    }
+    .form-input-navy {
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #d9e2ec;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        transition: all 0.15s ease-in-out;
+        background-color: white;
+    }
+    .form-input-navy:focus {
+        outline: none;
+        border-color: #334e68;
+        box-shadow: 0 0 0 3px rgba(51, 78, 104, 0.1);
+    }
+    .form-input-navy:hover {
+        border-color: #829ab1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-navy-900">
+                    {% if form.instance.pk %}Edit{% else %}Create{% endif %} Contract
+                </h1>
+                <nav class="text-sm text-gray-600 mt-2">
+                    <a href="{% url 'procurement:dashboard' %}" class="hover:text-navy-600">Dashboard</a>
+                    <span class="mx-2">/</span>
+                    <a href="{% url 'procurement:contract_list' %}" class="hover:text-navy-600">Contracts</a>
+                    <span class="mx-2">/</span>
+                    <span class="text-navy-900">{% if form.instance.pk %}Edit{% else %}Create{% endif %}</span>
+                </nav>
+            </div>
+            <a href="{% url 'procurement:contract_list' %}" class="bg-white text-navy-700 px-4 py-2 rounded-lg border border-navy-300 hover:bg-navy-50 transition-colors">
+                <i class="fas fa-arrow-left mr-2"></i>Back to Contracts
+            </a>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+        {% csrf_token %}
+        
+        {% if form.non_field_errors %}
+        <div class="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-lg">
+            <i class="fas fa-exclamation-triangle mr-2"></i>{{ form.non_field_errors }}
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Main Content (2/3 width) -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Contract Information -->
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="navy-gradient text-white px-6 py-4">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fas fa-file-contract mr-2"></i>Contract Information
+                        </h2>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-navy-700 mb-1">
+                                    Contract Number <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" name="contract_number" value="{{ form.contract_number.value|default:'' }}" 
+                                       class="form-input-navy" placeholder="Enter contract number" required>
+                                {% if form.contract_number.errors %}
+                                <p class="text-red-500 text-xs mt-1">{{ form.contract_number.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-navy-700 mb-1">
+                                    Type <span class="text-red-500">*</span>
+                                </label>
+                                <select name="contract_type" class="form-input-navy" required>
+                                    <option value="">Select type...</option>
+                                    {% for value, label in form.fields.contract_type.choices %}
+                                    <option value="{{ value }}" {% if form.contract_type.value == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% if form.contract_type.errors %}
+                                <p class="text-red-500 text-xs mt-1">{{ form.contract_type.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-navy-700 mb-1">
+                                    Status <span class="text-red-500">*</span>
+                                </label>
+                                <select name="status" class="form-input-navy" required>
+                                    {% for value, label in form.fields.status.choices %}
+                                    <option value="{{ value }}" {% if form.status.value == value %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% if form.status.errors %}
+                                <p class="text-red-500 text-xs mt-1">{{ form.status.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-navy-700 mb-1">
+                                Contract Title <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" name="title" value="{{ form.title.value|default:'' }}" 
+                                   class="form-input-navy" placeholder="Enter contract title" required>
+                            {% if form.title.errors %}
+                            <p class="text-red-500 text-xs mt-1">{{ form.title.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-navy-700 mb-1">
+                                    Supplier <span class="text-red-500">*</span>
+                                </label>
+                                <select name="supplier" class="form-input-navy" required>
+                                    <option value="">Select supplier...</option>
+                                    {% for supplier in form.fields.supplier.queryset %}
+                                    <option value="{{ supplier.pk }}" {% if form.supplier.value == supplier.pk|stringformat:"s" %}selected{% endif %}>
+                                        {{ supplier.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                {% if form.supplier.errors %}
+                                <p class="text-red-500 text-xs mt-1">{{ form.supplier.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-navy-700 mb-1">
+                                    Related Quote
+                                </label>
+                                <select name="quote" class="form-input-navy">
+                                    <option value="">Select quote (optional)...</option>
+                                    {% for quote in form.fields.quote.queryset %}
+                                    <option value="{{ quote.pk }}" {% if form.quote.value == quote.pk|stringformat:"s" %}selected{% endif %}>
+                                        {{ quote.quote_number }} - {{ quote.supplier.name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <p class="text-gray-500 text-xs mt-1">Link to approved quote if applicable</p>
+                                {% if form.quote.errors %}
+                                <p class="text-red-500 text-xs mt-1">{{ form.quote.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Details & Timeline -->
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="navy-gradient text-white px-6 py-4">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fas fa-dollar-sign mr-2"></i>Financial Details & Timeline
+                        </h2>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-navy-700 mb-1">
+                                    Value <span class="text-red-500">*</span>
+                                </label>
+                                <div class="relative">
+                                    <span class="absolute left-3 top-2 text-gray-500">$</span>
+                                    <input type="number" name="total_value" value="{{ form.total_value.value|default:'' }}" 
+                                           class="form-input-navy pl-8" placeholder="0.00" step="0.01" required>
+                                </div>
+                                {% if form.total_value.errors %}
+                                <p class="text-red-500 text-xs mt-1">{{ form.total_value.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-navy-700 mb-1">
+                                    Currency <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" name="currency" value="{{ form.currency.value|default:'USD' }}" 
+                                       class="form-input-navy" placeholder="USD" maxlength="3" required>
+                                {% if form.currency.errors %}
+                                <p class="text-red-500 text-xs mt-1">{{ form.currency.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-navy-700 mb-1">
+                                    Start Date <span class="text-red-500">*</span>
+                                </label>
+                                <input type="date" name="start_date" value="{{ form.start_date.value|date:'Y-m-d'|default:'' }}" 
+                                       id="id_start_date" class="form-input-navy" required>
+                                {% if form.start_date.errors %}
+                                <p class="text-red-500 text-xs mt-1">{{ form.start_date.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-navy-700 mb-1">
+                                    End Date <span class="text-red-500">*</span>
+                                </label>
+                                <input type="date" name="end_date" value="{{ form.end_date.value|date:'Y-m-d'|default:'' }}" 
+                                       id="id_end_date" class="form-input-navy" required>
+                                {% if form.end_date.errors %}
+                                <p class="text-red-500 text-xs mt-1">{{ form.end_date.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-navy-700 mb-1">
+                                Payment Terms <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" name="payment_terms" value="{{ form.payment_terms.value|default:'' }}" 
+                                   class="form-input-navy" placeholder="e.g., Net 30, 2/10 Net 30" required>
+                            <p class="text-gray-500 text-xs mt-1">Specify payment schedule and conditions</p>
+                            {% if form.payment_terms.errors %}
+                            <p class="text-red-500 text-xs mt-1">{{ form.payment_terms.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Terms and Conditions -->
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="navy-gradient text-white px-6 py-4">
+                        <h2 class="text-lg font-semibold flex items-center">
+                            <i class="fas fa-file-alt mr-2"></i>Terms and Conditions
+                        </h2>
+                    </div>
+                    <div class="p-6">
+                        <textarea name="terms_and_conditions" rows="8" class="form-input-navy" 
+                                  placeholder="Include all relevant terms, conditions, and special clauses...">{{ form.terms_and_conditions.value|default:'' }}</textarea>
+                        <p class="text-gray-500 text-xs mt-1">Include delivery terms, warranty conditions, penalties, and any special clauses</p>
+                        {% if form.terms_and_conditions.errors %}
+                        <p class="text-red-500 text-xs mt-1">{{ form.terms_and_conditions.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar (1/3 width) -->
+            <div class="space-y-6">
+                <!-- Contract Summary -->
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="bg-navy-50 px-6 py-4 border-b border-navy-100">
+                        <h3 class="text-sm font-semibold text-navy-900 flex items-center">
+                            <i class="fas fa-info-circle mr-2"></i>Contract Summary
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div class="bg-navy-50 rounded-lg p-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-sm text-navy-600">Duration</span>
+                                <span class="font-semibold text-navy-900" id="durationText">-</span>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Created By:</span>
+                                <span class="font-medium text-navy-900">{{ request.user.username }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Organization:</span>
+                                <span class="font-medium text-navy-900">{{ request.user.profile.organization.name|truncatechars:20 }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Date:</span>
+                                <span class="font-medium text-navy-900">{% now "M j, Y" %}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="bg-navy-50 px-6 py-4 border-b border-navy-100">
+                        <h3 class="text-sm font-semibold text-navy-900 flex items-center">
+                            <i class="fas fa-bolt mr-2"></i>Quick Actions
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-3">
+                        <button type="button" onclick="generateContractNumber()" 
+                                class="w-full bg-white text-navy-700 px-4 py-2 rounded-lg border border-navy-300 hover:bg-navy-50 transition-colors text-sm">
+                            <i class="fas fa-hashtag mr-2"></i>Generate Number
+                        </button>
+                        <button type="button" onclick="loadQuoteData()" 
+                                class="w-full bg-white text-navy-700 px-4 py-2 rounded-lg border border-navy-300 hover:bg-navy-50 transition-colors text-sm">
+                            <i class="fas fa-file-import mr-2"></i>Load from Quote
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 space-y-3">
+                        <button type="submit" name="save" 
+                                class="w-full bg-navy-700 text-white px-4 py-2 rounded-lg hover:bg-navy-800 transition-colors">
+                            <i class="fas fa-check mr-2"></i>
+                            {% if form.instance.pk %}Update{% else %}Create{% endif %} Contract
+                        </button>
+                        <button type="submit" name="save_draft" 
+                                class="w-full bg-gray-100 text-navy-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors">
+                            <i class="fas fa-save mr-2"></i>Save as Draft
+                        </button>
+                        <a href="{% url 'procurement:contract_list' %}" 
+                           class="block w-full text-center bg-white text-gray-600 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
+                            <i class="fas fa-times mr-2"></i>Cancel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize date pickers with Navy theme
+    const startDatePicker = flatpickr('#id_start_date', {
+        dateFormat: "Y-m-d",
+        onChange: function(selectedDates) {
+            if (selectedDates.length > 0) {
+                endDatePicker.set('minDate', selectedDates[0]);
+                calculateDuration();
+            }
+        }
+    });
+
+    const endDatePicker = flatpickr('#id_end_date', {
+        dateFormat: "Y-m-d",
+        onChange: function() {
+            calculateDuration();
+        }
+    });
+
+    // Calculate contract duration
+    function calculateDuration() {
+        const startDate = document.getElementById('id_start_date').value;
+        const endDate = document.getElementById('id_end_date').value;
+        
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            const diffTime = Math.abs(end - start);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            let durationText = `${diffDays} days`;
+            
+            if (diffDays > 365) {
+                const years = Math.floor(diffDays / 365);
+                const months = Math.floor((diffDays % 365) / 30);
+                durationText = `${years}y ${months}m`;
+            } else if (diffDays > 30) {
+                const months = Math.floor(diffDays / 30);
+                const days = diffDays % 30;
+                durationText = `${months}m ${days}d`;
+            }
+            
+            document.getElementById('durationText').textContent = durationText;
+        } else {
+            document.getElementById('durationText').textContent = '-';
+        }
+    }
+
+    // Generate contract number
+    window.generateContractNumber = function() {
+        const date = new Date();
+        const number = `CNT-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}`;
+        document.querySelector('input[name="contract_number"]').value = number;
+        showToast('Contract number generated', 'success');
+    };
+
+    // Load data from selected quote
+    window.loadQuoteData = function() {
+        const quoteSelect = document.querySelector('select[name="quote"]');
+        if (quoteSelect.value) {
+            // In a real implementation, this would fetch quote data via AJAX
+            showToast('Quote data loaded', 'success');
+        } else {
+            showToast('Please select a quote first', 'warning');
+        }
+    };
+
+    // Save as draft functionality
+    const draftBtn = document.querySelector('button[name="save_draft"]');
+    if (draftBtn) {
+        draftBtn.addEventListener('click', function(e) {
+            const statusField = document.querySelector('select[name="status"]');
+            if (statusField) {
+                statusField.value = 'draft';
+            }
+        });
+    }
+
+    // Initialize duration on load
+    calculateDuration();
+});
+</script>
+{% endblock %}

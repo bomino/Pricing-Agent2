@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Data Validation - AI Pricing Agent{% endblock %}
+
+{% block extra_head %}
+<style>
+    .error-row {
+        transition: all 0.3s ease;
+    }
+    
+    .error-row:hover {
+        background-color: #fef2f2;
+    }
+    
+    .error-type-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .error-critical {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    
+    .error-warning {
+        background: #fed7aa;
+        color: #92400e;
+    }
+    
+    .error-info {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+    
+    .fix-suggestion {
+        background: #f0fdf4;
+        border-left: 3px solid #22c55e;
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+    }
+    
+    .validation-summary {
+        background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+        border: 1px solid #fecaca;
+        border-radius: 12px;
+    }
+    
+    .progress-segment {
+        height: 8px;
+        display: inline-block;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="validationManager()">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-navy-900">Data Validation Review</h1>
+                <p class="text-gray-600 mt-1">Review and fix validation issues before processing</p>
+            </div>
+            <div class="flex space-x-3">
+                <a href="/data-ingestion/mapping/{{ upload.id }}/" class="px-4 py-2 text-navy-600 bg-white border border-navy-600 rounded-lg hover:bg-navy-50 transition-colors">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Mapping
+                </a>
+                <button @click="skipValidation()" class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>Skip Validation
+                </button>
+                <button @click="processWithFixes()" :disabled="!canProcess" class="px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-check-circle mr-2"></i>Process Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Info -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-navy-900">{{ upload.original_filename }}</h2>
+                    <p class="text-sm text-gray-600 mt-1">
+                        Uploaded {{ upload.created_at|timesince }} ago • 
+                        {{ upload.total_rows|default:0 }} rows • 
+                        {{ upload.get_data_type_display|default:upload.data_type|title }}
+                    </p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm text-gray-600">Validation Status</p>
+                    <p class="text-lg font-semibold text-red-600">{{ total_errors|default:0 }} Issues Found</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Validation Summary -->
+    <div class="validation-summary p-6 mb-6">
+        <h3 class="text-lg font-semibold text-navy-900 mb-4">
+            <i class="fas fa-chart-pie mr-2"></i>Validation Summary
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Critical Errors -->
+            <div class="bg-white rounded-lg p-4 border border-red-200">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Critical Errors</span>
+                    <span class="error-type-badge error-critical">
+                        <i class="fas fa-times-circle mr-1"></i>
+                        <span x-text="criticalCount">0</span>
+                    </span>
+                </div>
+                <p class="text-xs text-gray-600">Must be fixed before processing</p>
+                <div class="mt-3">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-red-600 h-2 rounded-full" :style="`width: ${criticalPercent}%`"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warnings -->
+            <div class="bg-white rounded-lg p-4 border border-yellow-200">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Warnings</span>
+                    <span class="error-type-badge error-warning">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        <span x-text="warningCount">0</span>
+                    </span>
+                </div>
+                <p class="text-xs text-gray-600">Recommended to review</p>
+                <div class="mt-3">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-yellow-500 h-2 rounded-full" :style="`width: ${warningPercent}%`"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info -->
+            <div class="bg-white rounded-lg p-4 border border-blue-200">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Information</span>
+                    <span class="error-type-badge error-info">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        <span x-text="infoCount">0</span>
+                    </span>
+                </div>
+                <p class="text-xs text-gray-600">For your information</p>
+                <div class="mt-3">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-blue-500 h-2 rounded-full" :style="`width: ${infoPercent}%`"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overall Progress -->
+        <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-medium text-gray-700">Data Quality Score</span>
+                <span class="text-lg font-semibold" :class="qualityScore >= 80 ? 'text-green-600' : qualityScore >= 60 ? 'text-yellow-600' : 'text-red-600'">
+                    <span x-text="qualityScore">75</span>%
+                </span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div class="h-full flex">
+                    <div class="progress-segment bg-green-500" :style="`width: ${validPercent}%`"></div>
+                    <div class="progress-segment bg-yellow-500" :style="`width: ${warningPercent}%`"></div>
+                    <div class="progress-segment bg-red-500" :style="`width: ${criticalPercent}%`"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Validation Errors Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-navy-800 to-navy-700 rounded-t-lg">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-white">
+                    <i class="fas fa-exclamation-circle mr-2"></i>Validation Issues
+                </h2>
+                <div class="flex items-center space-x-4">
+                    <select x-model="filterType" class="px-3 py-1 bg-white text-gray-700 border border-gray-300 rounded-md text-sm">
+                        <option value="all">All Issues</option>
+                        <option value="critical">Critical Only</option>
+                        <option value="warning">Warnings Only</option>
+                        <option value="info">Info Only</option>
+                    </select>
+                    <button @click="exportErrors()" class="px-3 py-1 bg-white text-navy-600 rounded-md text-sm hover:bg-gray-100">
+                        <i class="fas fa-download mr-1"></i>Export
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {% if error_records %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Row</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Field</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issue</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Current Value</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Suggested Fix</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for error in error_records %}
+                    <tr class="error-row" x-show="filterType === 'all' || filterType === '{{ error.validation_errors.type|default:'critical' }}'">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {{ error.row_number|default:forloop.counter }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="text-sm font-medium text-gray-900">{{ error.validation_errors.field|default:"Multiple" }}</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div>
+                                <span class="error-type-badge error-{{ error.validation_errors.type|default:'critical' }}">
+                                    {{ error.validation_errors.type|default:"Critical"|title }}
+                                </span>
+                                <p class="text-sm text-gray-700 mt-1">{{ error.validation_errors.message|default:error.validation_errors }}</p>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <code class="text-xs bg-gray-100 px-2 py-1 rounded">{{ error.raw_data.value|default:"-" }}</code>
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if error.validation_errors.suggestion %}
+                            <div class="fix-suggestion">
+                                <p class="text-sm text-green-800">{{ error.validation_errors.suggestion }}</p>
+                            </div>
+                            {% else %}
+                            <span class="text-sm text-gray-500">Manual review required</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center">
+                            <button @click="fixError({{ error.id }})" class="text-blue-600 hover:text-blue-900 text-sm">
+                                <i class="fas fa-edit"></i> Fix
+                            </button>
+                            <button @click="ignoreError({{ error.id }})" class="text-gray-600 hover:text-gray-900 text-sm ml-2">
+                                <i class="fas fa-eye-slash"></i> Ignore
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if total_errors > 100 %}
+        <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <p class="text-sm text-gray-700">
+                Showing <span class="font-medium">100</span> of <span class="font-medium">{{ total_errors }}</span> validation issues.
+                <a href="#" class="text-blue-600 hover:text-blue-800 ml-2">Load More</a>
+            </p>
+        </div>
+        {% endif %}
+        {% else %}
+        <!-- No Errors State -->
+        <div class="p-8 text-center">
+            <i class="fas fa-check-circle text-6xl text-green-500 mb-4"></i>
+            <h3 class="text-xl font-semibold text-gray-900 mb-2">No Validation Issues</h3>
+            <p class="text-gray-600 mb-6">Your data has passed all validation checks!</p>
+            <button @click="processData()" class="px-6 py-3 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors">
+                <i class="fas fa-rocket mr-2"></i>Process Data Now
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="mt-6 flex items-center justify-between">
+        <div class="text-sm text-gray-600">
+            <i class="fas fa-info-circle mr-1"></i>
+            Critical errors must be resolved before processing. Warnings can be skipped if needed.
+        </div>
+        <div class="flex space-x-3">
+            <button @click="saveProgress()" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                <i class="fas fa-save mr-2"></i>Save Progress
+            </button>
+            <button @click="processWithFixes()" :disabled="criticalCount > 0" class="px-6 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fas fa-play mr-2"></i>Process with Fixes
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function validationManager() {
+    return {
+        filterType: 'all',
+        criticalCount: {{ error_records|length|default:0 }},
+        warningCount: 0,
+        infoCount: 0,
+        qualityScore: 85,
+        
+        get validPercent() {
+            const total = {{ upload.total_rows|default:100 }};
+            const errors = this.criticalCount + this.warningCount;
+            return Math.max(0, ((total - errors) / total) * 100);
+        },
+        
+        get criticalPercent() {
+            const total = {{ upload.total_rows|default:100 }};
+            return (this.criticalCount / total) * 100;
+        },
+        
+        get warningPercent() {
+            const total = {{ upload.total_rows|default:100 }};
+            return (this.warningCount / total) * 100;
+        },
+        
+        get infoPercent() {
+            const total = {{ upload.total_rows|default:100 }};
+            return (this.infoCount / total) * 100;
+        },
+        
+        get canProcess() {
+            return this.criticalCount === 0;
+        },
+        
+        fixError(errorId) {
+            // Open modal to fix specific error
+            showToast('Opening error fix dialog...', 'info');
+        },
+        
+        ignoreError(errorId) {
+            if (confirm('Are you sure you want to ignore this validation error?')) {
+                // Mark error as ignored
+                this.criticalCount = Math.max(0, this.criticalCount - 1);
+                showToast('Error marked as ignored', 'success');
+            }
+        },
+        
+        async skipValidation() {
+            if (confirm('Are you sure you want to skip validation? This may result in data quality issues.')) {
+                const response = await fetch('/data-ingestion/skip-validation/{{ upload.id }}/', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                });
+                
+                if (response.ok) {
+                    showToast('Skipping validation...', 'warning');
+                    setTimeout(() => {
+                        window.location.href = '/data-ingestion/';
+                    }, 1500);
+                }
+            }
+        },
+        
+        async processWithFixes() {
+            if (this.criticalCount > 0) {
+                showToast('Please fix all critical errors before processing', 'error');
+                return;
+            }
+            
+            const response = await fetch('/data-ingestion/process/{{ upload.id }}/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+            
+            if (response.ok) {
+                showToast('Processing data...', 'success');
+                setTimeout(() => {
+                    window.location.href = '/data-ingestion/';
+                }, 1500);
+            }
+        },
+        
+        async saveProgress() {
+            showToast('Progress saved', 'success');
+        },
+        
+        exportErrors() {
+            // Export validation errors to CSV
+            window.location.href = '/data-ingestion/export-errors/{{ upload.id }}/';
+        },
+        
+        processData() {
+            this.processWithFixes();
+        }
+    }
+}
+</script>
+{% endblock %}

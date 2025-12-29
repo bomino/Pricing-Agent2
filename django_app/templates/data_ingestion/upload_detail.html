@@ -1,0 +1,251 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Upload Details - {{ upload.original_filename }}{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-6">
+            <nav class="flex mb-4" aria-label="Breadcrumb">
+                <ol class="inline-flex items-center space-x-1 md:space-x-3">
+                    <li><a href="{% url 'data_ingestion:dashboard' %}" class="text-gray-500 hover:text-gray-700">Data Uploads</a></li>
+                    <li><span class="mx-2 text-gray-400">/</span></li>
+                    <li class="text-gray-900 font-medium">{{ upload.original_filename }}</li>
+                </ol>
+            </nav>
+            <div class="flex justify-between items-center">
+                <h1 class="text-3xl font-bold text-gray-900">{{ upload.original_filename }}</h1>
+                <div class="flex space-x-2">
+                    {% if upload.status != 'completed' and valid_records > 0 %}
+                    <a href="{% url 'data_ingestion:process_upload' upload.id %}" 
+                       class="px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition">
+                        <i class="fas fa-play-circle mr-2"></i>Process to Main Tables
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Card -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900">Upload Status</h2>
+                <span class="px-3 py-1 rounded-full text-sm font-medium
+                    {% if upload.status == 'completed' %}bg-green-100 text-green-800
+                    {% elif upload.status == 'processing' %}bg-blue-100 text-blue-800
+                    {% elif upload.status == 'failed' %}bg-red-100 text-red-800
+                    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                    {{ upload.get_status_display }}
+                </span>
+            </div>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <p class="text-sm text-gray-600">Uploaded</p>
+                    <p class="font-medium">{{ upload.created_at|date:"M d, Y H:i" }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Uploaded By</p>
+                    <p class="font-medium">{{ upload.uploaded_by.get_full_name|default:upload.uploaded_by.username }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">File Size</p>
+                    <p class="font-medium">{{ upload.file_size|filesizeformat }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Data Type</p>
+                    <p class="font-medium">{{ upload.get_data_type_display }}</p>
+                </div>
+            </div>
+            
+            {% if upload.error_message %}
+            <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p class="text-sm text-red-800">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    {{ upload.error_message }}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Processing Statistics -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Total Records</p>
+                        <p class="text-2xl font-bold text-gray-900">{{ total_records }}</p>
+                    </div>
+                    <i class="fas fa-database text-3xl text-gray-400"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Processed</p>
+                        <p class="text-2xl font-bold text-green-600">{{ processed_records }}</p>
+                    </div>
+                    <i class="fas fa-check-circle text-3xl text-green-400"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Valid</p>
+                        <p class="text-2xl font-bold text-blue-600">{{ valid_records }}</p>
+                    </div>
+                    <i class="fas fa-clipboard-check text-3xl text-blue-400"></i>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">Duplicates</p>
+                        <p class="text-2xl font-bold text-yellow-600">{{ duplicate_records }}</p>
+                    </div>
+                    <i class="fas fa-copy text-3xl text-yellow-400"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Created Entities Section (for completed uploads) -->
+        {% if upload.status == 'completed' and created_entities %}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                What Was Created
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="text-center p-4 bg-blue-50 rounded-lg">
+                    <p class="text-2xl font-bold text-blue-600">{{ created_entities.suppliers|default:0 }}</p>
+                    <p class="text-sm text-gray-600">Suppliers</p>
+                    <a href="{% url 'procurement:supplier_list' %}"
+                       class="text-xs text-blue-500 hover:text-blue-700 mt-1 inline-block">
+                        View Suppliers →
+                    </a>
+                </div>
+                <div class="text-center p-4 bg-green-50 rounded-lg">
+                    <p class="text-2xl font-bold text-green-600">{{ created_entities.materials|default:0 }}</p>
+                    <p class="text-sm text-gray-600">Materials</p>
+                    <a href="{% url 'pricing:material_list' %}"
+                       class="text-xs text-green-500 hover:text-green-700 mt-1 inline-block">
+                        View Materials →
+                    </a>
+                </div>
+                <div class="text-center p-4 bg-purple-50 rounded-lg">
+                    <p class="text-2xl font-bold text-purple-600">{{ created_entities.purchase_orders|default:0 }}</p>
+                    <p class="text-sm text-gray-600">Purchase Orders</p>
+                    <a href="{% url 'procurement:po_list' %}"
+                       class="text-xs text-purple-500 hover:text-purple-700 mt-1 inline-block">
+                        View POs →
+                    </a>
+                </div>
+                <div class="text-center p-4 bg-orange-50 rounded-lg">
+                    <p class="text-2xl font-bold text-orange-600">{{ created_entities.price_records|default:0 }}</p>
+                    <p class="text-sm text-gray-600">Price Records</p>
+                    <a href="{% url 'analytics:dashboard' %}"
+                       class="text-xs text-orange-500 hover:text-orange-700 mt-1 inline-block">
+                        View Analytics →
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Processing Logs -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Processing History</h2>
+                <div class="space-y-3 max-h-96 overflow-y-auto">
+                    {% for log in logs %}
+                    <div class="border-l-4 
+                        {% if 'error' in log.action %}border-red-500
+                        {% elif 'completed' in log.action %}border-green-500
+                        {% elif 'started' in log.action %}border-blue-500
+                        {% else %}border-gray-300{% endif %} 
+                        pl-4 py-2">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="font-medium text-gray-900">{{ log.get_action_display }}</p>
+                                <p class="text-sm text-gray-600">{{ log.message }}</p>
+                            </div>
+                            <span class="text-xs text-gray-500">{{ log.timestamp|date:"H:i:s" }}</span>
+                        </div>
+                        {% if log.rows_affected %}
+                        <p class="text-xs text-gray-500 mt-1">{{ log.rows_affected }} rows affected</p>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="text-gray-500 text-center py-4">No processing history yet</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Sample Records -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Sample Records</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead>
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Row</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Material</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            {% for record in sample_records %}
+                            <tr>
+                                <td class="px-3 py-2 text-sm text-gray-900">{{ record.row_number }}</td>
+                                <td class="px-3 py-2 text-sm text-gray-900">
+                                    {{ record.supplier_name|default:"-" }}
+                                </td>
+                                <td class="px-3 py-2 text-sm text-gray-900">
+                                    {{ record.material_description|truncatechars:30|default:"-" }}
+                                </td>
+                                <td class="px-3 py-2">
+                                    <span class="px-2 py-1 text-xs rounded-full
+                                        {% if record.is_processed %}bg-green-100 text-green-800
+                                        {% elif record.validation_status == 'valid' %}bg-blue-100 text-blue-800
+                                        {% else %}bg-red-100 text-red-800{% endif %}">
+                                        {% if record.is_processed %}Processed
+                                        {% else %}{{ record.get_validation_status_display }}{% endif %}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="px-3 py-4 text-center text-gray-500">
+                                    No records to display
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="mt-6 flex justify-between">
+            <a href="{% url 'data_ingestion:dashboard' %}" 
+               class="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">
+                <i class="fas fa-arrow-left mr-2"></i>Back to Uploads
+            </a>
+            
+            {% if upload.status != 'completed' and valid_records > 0 %}
+            <a href="{% url 'data_ingestion:process_upload' upload.id %}" 
+               class="px-6 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition">
+                <i class="fas fa-play-circle mr-2"></i>Process to Main Tables
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,481 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pricing-fastapi
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: fastapi
+    version: v1.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: pricing-agent
+      component: fastapi
+  template:
+    metadata:
+      labels:
+        app: pricing-agent
+        component: fastapi
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      imagePullSecrets:
+      - name: pricing-docker-registry
+      
+      initContainers:
+      - name: model-loader
+        image: your-registry.com/pricing-agent/fastapi:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Loading ML models..."
+          mkdir -p /app/fastapi_ml/ml_artifacts/models
+          # Add your model loading logic here
+          echo "Model loading completed"
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/fastapi_ml/ml_artifacts/models
+        env:
+        - name: REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@pricing-redis:6379/1"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: REDIS_PASSWORD
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+      
+      containers:
+      - name: fastapi
+        image: your-registry.com/pricing-agent/fastapi:latest
+        ports:
+        - containerPort: 8001
+          name: http
+        env:
+        - name: DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: DEBUG
+        - name: REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@pricing-redis:6379/1"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: REDIS_PASSWORD
+        - name: DATABASE_URL
+          value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@pricing-postgres:5432/$(POSTGRES_DB)"
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: POSTGRES_DB
+        - name: ALLOWED_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: ALLOWED_ORIGINS
+        - name: ALLOWED_HOSTS
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: ALLOWED_HOSTS
+        - name: USE_GPU
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: USE_GPU
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: SENTRY_DSN
+              optional: true
+        
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/fastapi_ml/ml_artifacts/models
+          readOnly: true
+        - name: logs
+          mountPath: /app/logs
+        - name: tmp
+          mountPath: /tmp
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 15
+        
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: pricing-models-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: pricing-fastapi-logs-pvc
+      - name: tmp
+        emptyDir: {}
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - fastapi
+              topologyKey: kubernetes.io/hostname
+
+---
+# GPU-enabled FastAPI deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pricing-fastapi-gpu
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: fastapi-gpu
+    version: v1.0.0
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # GPU nodes typically require recreate strategy
+  selector:
+    matchLabels:
+      app: pricing-agent
+      component: fastapi-gpu
+  template:
+    metadata:
+      labels:
+        app: pricing-agent
+        component: fastapi-gpu
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      imagePullSecrets:
+      - name: pricing-docker-registry
+      nodeSelector:
+        accelerator: nvidia-tesla-k80  # Adjust based on your GPU nodes
+      tolerations:
+      - key: "nvidia.com/gpu"
+        operator: "Exists"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: fastapi-gpu
+        image: your-registry.com/pricing-agent/fastapi:gpu-latest
+        ports:
+        - containerPort: 8001
+          name: http
+        env:
+        - name: DEBUG
+          value: "false"
+        - name: USE_GPU
+          value: "true"
+        - name: REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@pricing-redis:6379/1"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: REDIS_PASSWORD
+        - name: DATABASE_URL
+          value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@pricing-postgres:5432/$(POSTGRES_DB)"
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: POSTGRES_DB
+        
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/fastapi_ml/ml_artifacts/models
+          readOnly: true
+        - name: logs
+          mountPath: /app/logs
+        - name: tmp
+          mountPath: /tmp
+        
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+            nvidia.com/gpu: 1
+        
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 5
+        
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 20
+      
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: pricing-models-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: pricing-fastapi-logs-pvc
+      - name: tmp
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pricing-fastapi
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: fastapi
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8001"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+    protocol: TCP
+  selector:
+    app: pricing-agent
+    component: fastapi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pricing-fastapi-gpu
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: fastapi-gpu
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8001"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+    protocol: TCP
+  selector:
+    app: pricing-agent
+    component: fastapi-gpu
+
+---
+# Horizontal Pod Autoscaler for CPU-based FastAPI
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pricing-fastapi-hpa
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: fastapi
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pricing-fastapi
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600  # Longer stabilization for ML service
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 120
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 120
+      - type: Pods
+        value: 1
+        periodSeconds: 120
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pricing-fastapi-pdb
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: fastapi
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: pricing-agent
+      component: fastapi
+
+---
+# Persistent Volume Claims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pricing-models-pvc
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: fastapi
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi  # Large storage for ML models
+  storageClassName: fast-ssd
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pricing-fastapi-logs-pvc
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: fastapi
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard

@@ -1,0 +1,409 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Quote Comparison{% endblock %}
+
+{% block extra_css %}
+<style>
+    .comparison-header {
+        background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+    
+    .rfq-selector {
+        background: white;
+        border-radius: 8px;
+        padding: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .comparison-table {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .comparison-table th {
+        background: #1e3a8a;
+        color: white;
+        font-weight: 600;
+        padding: 1rem;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .comparison-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .best-price {
+        background: #10b981;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-weight: 600;
+    }
+    
+    .price-diff {
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+    
+    .supplier-header {
+        background: #f3f4f6;
+        font-weight: 600;
+        border-left: 4px solid #1e3a8a;
+    }
+    
+    .item-row:hover {
+        background: #f9fafb;
+    }
+    
+    .comparison-summary {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+    
+    .metric-card {
+        text-align: center;
+        padding: 1rem;
+        border-right: 1px solid #e5e7eb;
+    }
+    
+    .metric-card:last-child {
+        border-right: none;
+    }
+    
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #1e3a8a;
+    }
+    
+    .metric-label {
+        color: #6b7280;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+    }
+    
+    .winner-badge {
+        background: #fbbf24;
+        color: #92400e;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .comparison-chart {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    {% if rfq %}
+    <!-- RFQ Comparison View -->
+    <div class="comparison-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1 class="h2 mb-2">Quote Comparison</h1>
+                <p class="mb-0 opacity-75">
+                    <i class="fas fa-file-alt me-2"></i>RFQ: {{ rfq.title }} ({{ rfq.rfq_number }})
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <a href="{% url 'procurement:rfq_detail' rfq.pk %}" class="btn btn-light">
+                    <i class="fas fa-eye me-2"></i>View RFQ
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if comparison_data %}
+    <!-- Comparison Summary -->
+    <div class="comparison-summary">
+        <div class="row">
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value">{{ quotes.count }}</div>
+                    <div class="metric-label">Total Quotes</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value">{{ rfq.currency }} {{ comparison_data.0.total_amount|floatformat:0 }}</div>
+                    <div class="metric-label">Lowest Quote</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value">{{ rfq.currency }} {{ comparison_data|last.total_amount|floatformat:0 }}</div>
+                    <div class="metric-label">Highest Quote</div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="metric-card">
+                    <div class="metric-value">
+                        {% with diff=comparison_data|last.total_amount|add:comparison_data.0.total_amount|floatformat:0 %}
+                        {{ rfq.currency }} {{ diff }}
+                        {% endwith %}
+                    </div>
+                    <div class="metric-label">Price Range</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Price Comparison Chart -->
+    <div class="comparison-chart">
+        <h5 class="mb-3">Total Quote Values</h5>
+        <canvas id="priceChart" height="80"></canvas>
+    </div>
+
+    <!-- Detailed Comparison Table -->
+    <div class="comparison-table table-responsive">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Item / Supplier</th>
+                    {% for data in comparison_data %}
+                    <th class="text-center">
+                        {{ data.supplier.name }}
+                        {% if forloop.first %}
+                        <span class="winner-badge ms-2">Lowest</span>
+                        {% endif %}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Total Amount Row -->
+                <tr class="supplier-header">
+                    <td><strong>Total Amount</strong></td>
+                    {% for data in comparison_data %}
+                    <td class="text-center">
+                        <strong>{{ rfq.currency }} {{ data.total_amount|floatformat:2 }}</strong>
+                        {% if not forloop.first %}
+                        <div class="price-diff">
+                            +{{ data.total_amount|add:comparison_data.0.total_amount|floatformat:2 }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+
+                <!-- Payment Terms -->
+                <tr>
+                    <td>Payment Terms</td>
+                    {% for data in comparison_data %}
+                    <td class="text-center">{{ data.payment_terms }}</td>
+                    {% endfor %}
+                </tr>
+
+                <!-- Delivery Terms -->
+                <tr>
+                    <td>Delivery Terms</td>
+                    {% for data in comparison_data %}
+                    <td class="text-center">{{ data.delivery_terms }}</td>
+                    {% endfor %}
+                </tr>
+
+                <!-- Lead Time -->
+                <tr>
+                    <td>Lead Time</td>
+                    {% for data in comparison_data %}
+                    <td class="text-center">{{ data.lead_time }} days</td>
+                    {% endfor %}
+                </tr>
+
+                <!-- Validity Period -->
+                <tr>
+                    <td>Quote Validity</td>
+                    {% for data in comparison_data %}
+                    <td class="text-center">{{ data.validity_period }} days</td>
+                    {% endfor %}
+                </tr>
+
+                <!-- Item-wise Comparison -->
+                <tr class="supplier-header">
+                    <td colspan="{{ comparison_data|length|add:1 }}">
+                        <strong>Item-wise Pricing</strong>
+                    </td>
+                </tr>
+
+                {% for item in rfq_items %}
+                <tr class="item-row">
+                    <td>
+                        <strong>{{ item.material.name }}</strong><br>
+                        <small class="text-muted">Qty: {{ item.quantity }} {{ item.material.unit_of_measure }}</small>
+                    </td>
+                    {% for data in comparison_data %}
+                    <td class="text-center">
+                        {% if item.id in data.items %}
+                        <div>
+                            {{ rfq.currency }} {{ data.items|get_item:item.id.unit_price|floatformat:2 }}/unit
+                        </div>
+                        <div class="text-muted small">
+                            Total: {{ rfq.currency }} {{ data.items|get_item:item.id.price|floatformat:2 }}
+                        </div>
+                        {% if best_prices|get_item:item.id.supplier == data.supplier.name %}
+                        <span class="best-price small">Best Price</span>
+                        {% endif %}
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="mt-4">
+        <button class="btn btn-primary" onclick="exportComparison()">
+            <i class="fas fa-download me-2"></i>Export Comparison
+        </button>
+        <button class="btn btn-success" onclick="selectWinner()">
+            <i class="fas fa-trophy me-2"></i>Select Winner
+        </button>
+        <a href="{% url 'procurement:quote_list' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-list me-2"></i>View All Quotes
+        </a>
+    </div>
+
+    {% else %}
+    <!-- No Quotes Message -->
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        No quotes have been submitted for this RFQ yet.
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- RFQ Selection View -->
+    <div class="comparison-header">
+        <h1 class="h2 mb-2">Quote Comparison Tool</h1>
+        <p class="mb-0 opacity-75">Select an RFQ to compare supplier quotes</p>
+    </div>
+
+    <div class="rfq-selector">
+        {% if rfqs %}
+        <h5 class="mb-3">Select RFQ to Compare</h5>
+        <div class="list-group">
+            {% for rfq in rfqs %}
+            <a href="?rfq_id={{ rfq.id }}" class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between">
+                    <div>
+                        <h6 class="mb-1">{{ rfq.title }}</h6>
+                        <p class="mb-1 text-muted">{{ rfq.rfq_number }}</p>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-primary">{{ rfq.quote_count }} Quotes</span>
+                        <small class="d-block text-muted">{{ rfq.deadline|date:"M j, Y" }}</small>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            No RFQs with quotes available for comparison.
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+{% if comparison_data %}
+// Price Comparison Chart
+const ctx = document.getElementById('priceChart').getContext('2d');
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: [{% for data in comparison_data %}'{{ data.supplier.name }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+        datasets: [{
+            label: 'Total Quote Value',
+            data: [{% for data in comparison_data %}{{ data.total_amount }}{% if not forloop.last %},{% endif %}{% endfor %}],
+            backgroundColor: [
+                'rgba(16, 185, 129, 0.8)',
+                'rgba(59, 130, 246, 0.8)',
+                'rgba(251, 191, 36, 0.8)',
+                'rgba(239, 68, 68, 0.8)',
+                'rgba(156, 163, 175, 0.8)'
+            ],
+            borderColor: [
+                'rgb(16, 185, 129)',
+                'rgb(59, 130, 246)',
+                'rgb(251, 191, 36)',
+                'rgb(239, 68, 68)',
+                'rgb(156, 163, 175)'
+            ],
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return '{{ rfq.currency }} ' + context.parsed.y.toLocaleString();
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return '{{ rfq.currency }} ' + value.toLocaleString();
+                    }
+                }
+            }
+        }
+    }
+});
+
+function exportComparison() {
+    // Implement export functionality
+    alert('Exporting comparison to Excel...');
+}
+
+function selectWinner() {
+    // Implement winner selection
+    const winner = '{{ comparison_data.0.supplier.name }}';
+    if (confirm(`Select ${winner} as the winning supplier?`)) {
+        console.log('Selecting winner...');
+    }
+}
+{% endif %}
+</script>
+{% endblock %}

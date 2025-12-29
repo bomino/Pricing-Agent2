@@ -1,0 +1,192 @@
+# Multi-stage FastAPI ML Service Dockerfile for production-ready deployment
+ARG PYTHON_VERSION=3.11
+ARG ALPINE_VERSION=3.19
+
+# Base stage with system dependencies
+FROM python:${PYTHON_VERSION}-alpine${ALPINE_VERSION} AS base
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    POETRY_HOME="/opt/poetry" \
+    POETRY_VERSION=1.8.2
+
+# Install system dependencies
+RUN apk add --no-cache \
+    gcc \
+    g++ \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    cmake \
+    make \
+    curl \
+    bash \
+    git \
+    linux-headers \
+    postgresql-dev \
+    # ML dependencies
+    openblas-dev \
+    lapack-dev \
+    gfortran \
+    && addgroup -g 1001 -S mlgroup \
+    && adduser -u 1001 -S mluser -G mlgroup
+
+# Install Poetry
+RUN pip install --no-cache-dir poetry==$POETRY_VERSION
+
+# Dependencies stage
+FROM base AS dependencies
+
+WORKDIR /app
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock ./
+
+# Install ML-specific dependencies first (these are large)
+RUN poetry install --only=main --no-interaction --no-ansi \
+    && rm -rf $POETRY_CACHE_DIR
+
+# GPU-enabled stage (optional)
+FROM nvidia/cuda:12.1-runtime-ubuntu22.04 AS gpu-base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    POETRY_HOME="/opt/poetry" \
+    POETRY_VERSION=1.8.2
+
+# Install Python and dependencies on GPU base
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3-pip \
+    python3.11-dev \
+    gcc \
+    g++ \
+    curl \
+    bash \
+    git \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/bin/python3.11 /usr/bin/python \
+    && groupadd -g 1001 mlgroup \
+    && useradd -u 1001 -g mlgroup -s /bin/bash mluser
+
+# Install Poetry on GPU base
+RUN pip install --no-cache-dir poetry==$POETRY_VERSION
+
+# Development stage
+FROM dependencies AS development
+
+# Install dev dependencies
+RUN poetry install --no-interaction --no-ansi \
+    && rm -rf $POETRY_CACHE_DIR
+
+# Copy application code
+COPY --chown=mluser:mlgroup . .
+
+# Create model artifacts directory
+RUN mkdir -p /app/fastapi_ml/ml_artifacts/models \
+    && chown -R mluser:mlgroup /app/fastapi_ml/ml_artifacts
+
+# Set working directory and user
+USER mluser
+WORKDIR /app/fastapi_ml
+
+# Expose port
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Default command for development
+CMD ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+
+# Production stage
+FROM dependencies AS production
+
+# Copy application code
+COPY --chown=mluser:mlgroup . .
+
+# Copy configuration files
+COPY infrastructure/docker/fastapi/gunicorn.conf.py /app/gunicorn.conf.py
+COPY infrastructure/docker/fastapi/entrypoint.sh /app/entrypoint.sh
+
+# Set executable permissions
+RUN chmod +x /app/entrypoint.sh
+
+# Create necessary directories
+RUN mkdir -p /app/fastapi_ml/ml_artifacts/models /app/logs \
+    && chown -R mluser:mlgroup /app/fastapi_ml/ml_artifacts /app/logs
+
+# Install additional production tools
+RUN apk add --no-cache supervisor
+
+# Copy supervisor configuration
+COPY infrastructure/docker/fastapi/supervisord.conf /etc/supervisord.conf
+
+# Set working directory and user
+USER mluser
+WORKDIR /app/fastapi_ml
+
+# Expose port
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Use entrypoint script
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# GPU production stage
+FROM gpu-base AS gpu-production
+
+WORKDIR /app
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock ./
+
+# Install dependencies with GPU support
+RUN poetry install --only=main --no-interaction --no-ansi \
+    && rm -rf $POETRY_CACHE_DIR
+
+# Copy application code
+COPY --chown=mluser:mlgroup . .
+
+# Copy configuration files
+COPY infrastructure/docker/fastapi/gunicorn.conf.py /app/gunicorn.conf.py
+COPY infrastructure/docker/fastapi/entrypoint-gpu.sh /app/entrypoint.sh
+
+# Set executable permissions
+RUN chmod +x /app/entrypoint.sh
+
+# Create necessary directories
+RUN mkdir -p /app/fastapi_ml/ml_artifacts/models /app/logs \
+    && chown -R mluser:mlgroup /app/fastapi_ml/ml_artifacts /app/logs
+
+# Set working directory and user
+USER mluser
+WORKDIR /app/fastapi_ml
+
+# Expose port
+EXPOSE 8001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Use entrypoint script
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Security scanning stage
+FROM aquasec/trivy:latest AS security-scan
+COPY --from=production /app /scan-target
+RUN trivy fs --exit-code 1 --severity HIGH,CRITICAL /scan-target

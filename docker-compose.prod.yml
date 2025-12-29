@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg14
+    container_name: pricing_postgres_prod
+    environment:
+      POSTGRES_DB: ${DB_NAME:-pricing_agent}
+      POSTGRES_USER: ${DB_USER:-pricing_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pricing_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: pricing_redis_prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_prod:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  django:
+    build:
+      context: ./django_app
+      dockerfile: Dockerfile.prod
+    container_name: pricing_django_prod
+    env_file:
+      - .env.production
+    environment:
+      - DJANGO_SETTINGS_MODULE=pricing_agent.settings_production
+    volumes:
+      - ./django_app:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+      - logs_volume:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+    command: >
+      sh -c "
+      python manage.py prepare_deployment &&
+      gunicorn pricing_agent.wsgi:application 
+        --bind 0.0.0.0:8000 
+        --workers ${GUNICORN_WORKERS:-4}
+        --threads ${GUNICORN_THREADS:-2}
+        --timeout 120
+        --access-logfile /app/logs/gunicorn-access.log
+        --error-logfile /app/logs/gunicorn-error.log
+        --log-level info
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  celery:
+    build:
+      context: ./django_app
+      dockerfile: Dockerfile.prod
+    container_name: pricing_celery_prod
+    env_file:
+      - .env.production
+    environment:
+      - DJANGO_SETTINGS_MODULE=pricing_agent.settings_production
+    volumes:
+      - ./django_app:/app
+      - media_volume:/app/media
+      - logs_volume:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+    command: celery -A pricing_agent worker -l info --logfile=/app/logs/celery.log
+
+  celery-beat:
+    build:
+      context: ./django_app
+      dockerfile: Dockerfile.prod
+    container_name: pricing_celery_beat_prod
+    env_file:
+      - .env.production
+    environment:
+      - DJANGO_SETTINGS_MODULE=pricing_agent.settings_production
+    volumes:
+      - ./django_app:/app
+      - logs_volume:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+    command: celery -A pricing_agent beat -l info --logfile=/app/logs/celery-beat.log
+
+  nginx:
+    image: nginx:alpine
+    container_name: pricing_nginx_prod
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - static_volume:/static
+      - media_volume:/media
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - django
+    restart: always
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data_prod:
+  redis_data_prod:
+  static_volume:
+  media_volume:
+  logs_volume:
+
+networks:
+  default:
+    name: pricing_network_prod
+    driver: bridge

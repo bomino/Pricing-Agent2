@@ -1,0 +1,401 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: pricing-agent-monitoring
+  labels:
+    app: alertmanager
+    component: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'alerts@yourdomain.com'
+      smtp_auth_username: 'alerts@yourdomain.com'
+      smtp_auth_password: 'your-email-password'
+      slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'web.hook'
+      routes:
+      - match:
+          severity: critical
+        receiver: 'critical-alerts'
+        routes:
+        - match:
+            alertname: ServiceDown
+          receiver: 'service-down-alerts'
+      - match:
+          severity: warning
+        receiver: 'warning-alerts'
+      - match:
+          alertname: DiskSpaceLow
+        receiver: 'infrastructure-alerts'
+
+    receivers:
+    - name: 'web.hook'
+      webhook_configs:
+      - url: 'http://webhook-service:5000/alerts'
+        http_config:
+          bearer_token: 'your-webhook-token'
+
+    - name: 'critical-alerts'
+      email_configs:
+      - to: 'devops-team@yourdomain.com'
+        subject: '[CRITICAL] Pricing Agent Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Labels: {{ .Labels }}
+          {{ end }}
+      slack_configs:
+      - channel: '#pricing-agent-alerts'
+        username: 'AlertManager'
+        icon_emoji: ':rotating_light:'
+        title: 'CRITICAL Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Severity:* {{ .Labels.severity }}
+          {{ end }}
+        send_resolved: true
+
+    - name: 'service-down-alerts'
+      email_configs:
+      - to: 'devops-team@yourdomain.com,engineering-manager@yourdomain.com'
+        subject: '[SERVICE DOWN] {{ .GroupLabels.alertname }} - Immediate Action Required'
+        body: |
+          SERVICE DOWN ALERT
+          
+          {{ range .Alerts }}
+          Service: {{ .Labels.job }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Started: {{ .StartsAt }}
+          {{ end }}
+          
+          Please investigate immediately.
+      slack_configs:
+      - channel: '#pricing-agent-critical'
+        username: 'AlertManager'
+        icon_emoji: ':fire:'
+        title: 'SERVICE DOWN: {{ .GroupLabels.alertname }}'
+        text: |
+          <!channel> SERVICE DOWN ALERT
+          {{ range .Alerts }}
+          *Service:* {{ .Labels.job }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+    - name: 'warning-alerts'
+      slack_configs:
+      - channel: '#pricing-agent-alerts'
+        username: 'AlertManager'
+        icon_emoji: ':warning:'
+        title: 'Warning: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+    - name: 'infrastructure-alerts'
+      email_configs:
+      - to: 'infrastructure-team@yourdomain.com'
+        subject: '[INFRASTRUCTURE] {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Node: {{ .Labels.instance }}
+          {{ end }}
+      slack_configs:
+      - channel: '#infrastructure-alerts'
+        username: 'AlertManager'
+        icon_emoji: ':building_construction:'
+        title: 'Infrastructure Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          {{ end }}
+
+    inhibit_rules:
+    - source_match:
+        severity: 'critical'
+      target_match:
+        severity: 'warning'
+      equal: ['alertname', 'dev', 'instance']
+
+    templates:
+    - '/etc/alertmanager/templates/*.tmpl'
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: pricing-agent-monitoring
+  labels:
+    app: alertmanager
+    component: monitoring
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      serviceAccountName: alertmanager
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+      - name: alertmanager
+        image: prom/alertmanager:v0.26.0
+        ports:
+        - containerPort: 9093
+        args:
+          - '--config.file=/etc/alertmanager/alertmanager.yml'
+          - '--storage.path=/alertmanager'
+          - '--web.external-url=https://internal.pricing-agent.yourdomain.com/alertmanager/'
+          - '--web.route-prefix=/'
+          - '--cluster.listen-address=0.0.0.0:9094'
+          - '--cluster.peer=alertmanager-0.alertmanager:9094'
+          - '--cluster.peer=alertmanager-1.alertmanager:9094'
+        volumeMounts:
+        - name: alertmanager-config
+          mountPath: /etc/alertmanager/
+        - name: alertmanager-storage
+          mountPath: /alertmanager
+        - name: alertmanager-templates
+          mountPath: /etc/alertmanager/templates
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9093
+          initialDelaySeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9093
+          initialDelaySeconds: 30
+          timeoutSeconds: 10
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: alertmanager-config
+        configMap:
+          name: alertmanager-config
+      - name: alertmanager-storage
+        persistentVolumeClaim:
+          claimName: alertmanager-storage-pvc
+      - name: alertmanager-templates
+        configMap:
+          name: alertmanager-templates
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: pricing-agent-monitoring
+  labels:
+    app: alertmanager
+    component: monitoring
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9093
+    targetPort: 9093
+    name: http
+  - port: 9094
+    targetPort: 9094
+    name: cluster
+  selector:
+    app: alertmanager
+
+---
+# Headless service for StatefulSet clustering
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager-headless
+  namespace: pricing-agent-monitoring
+  labels:
+    app: alertmanager
+    component: monitoring
+spec:
+  clusterIP: None
+  ports:
+  - port: 9093
+    targetPort: 9093
+    name: http
+  - port: 9094
+    targetPort: 9094
+    name: cluster
+  selector:
+    app: alertmanager
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alertmanager
+  namespace: pricing-agent-monitoring
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alertmanager-storage-pvc
+  namespace: pricing-agent-monitoring
+  labels:
+    app: alertmanager
+    component: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3
+
+---
+# AlertManager notification templates
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-templates
+  namespace: pricing-agent-monitoring
+  labels:
+    app: alertmanager
+    component: monitoring
+data:
+  slack.tmpl: |
+    {{ define "slack.default.title" }}
+    [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.SortedPairs.Values | join " " }}
+    {{ end }}
+
+    {{ define "slack.default.text" }}
+    {{ range .Alerts }}
+    *Alert:* {{ .Annotations.summary }}{{ if .Labels.severity }} - `{{ .Labels.severity }}`{{ end }}
+    *Description:* {{ .Annotations.description }}
+    *Details:*
+      {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
+      {{ end }}
+    {{ end }}
+    {{ end }}
+
+    {{ define "slack.default.fallback" }}
+    {{ template "slack.default.title" . }} | {{ template "slack.default.titlelink" . }}
+    {{ end }}
+
+  email.tmpl: |
+    {{ define "email.default.subject" }}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.SortedPairs.Values | join " " }}{{ end }}
+
+    {{ define "email.default.html" }}
+    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+    <html xmlns="http://www.w3.org/1999/xhtml" style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; box-sizing: border-box; font-size: 14px; margin: 0;">
+    <head>
+      <meta name="viewport" content="width=device-width" />
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+      <title>{{ template "email.default.subject" . }}</title>
+    </head>
+    <body style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; margin: 0;">
+      <table class="body-wrap" style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; width: 100%; background-color: #f6f6f6; margin: 0;">
+        <tr style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; margin: 0;">
+          <td style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; vertical-align: top; margin: 0;" valign="top"></td>
+          <td class="container" width="600" style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; vertical-align: top; display: block !important; max-width: 600px !important; clear: both !important; margin: 0 auto;" valign="top">
+            <div class="content" style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; max-width: 600px; display: block; margin: 0 auto; padding: 20px;">
+              <table class="main" width="100%" cellpadding="0" cellspacing="0" style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; border-radius: 3px; margin: 0; border: 1px solid #e9e9e9;" bgcolor="#fff">
+                <tr style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; color: #fff; box-sizing: border-box; font-size: 14px; margin: 0;" bgcolor="{{ if eq .Status "firing" }}#DC4C64{{ else }}#36C5F0{{ end }}">
+                  <td class="alert-name" style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 16px; vertical-align: top; color: #fff; font-weight: 500; text-align: center; border-radius: 3px 3px 0 0; background: {{ if eq .Status "firing" }}#DC4C64{{ else }}#36C5F0{{ end }}; margin: 0; padding: 20px;" align="center" bgcolor="{{ if eq .Status "firing" }}#DC4C64{{ else }}#36C5F0{{ end }}" valign="top">
+                    [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.SortedPairs.Values | join " " }}
+                  </td>
+                </tr>
+                <tr style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; margin: 0;">
+                  <td class="content-wrap" style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; vertical-align: top; margin: 0; padding: 20px;" valign="top">
+                    {{ range .Alerts }}
+                    <table width="100%" cellpadding="0" cellspacing="0" style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; margin: 0;">
+                      <tr style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; margin: 0;">
+                        <td class="content-block" style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; vertical-align: top; margin: 0; padding: 0 0 20px;" valign="top">
+                          <strong>Alert:</strong> {{ .Annotations.summary }}
+                        </td>
+                      </tr>
+                      <tr style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; margin: 0;">
+                        <td class="content-block" style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; vertical-align: top; margin: 0; padding: 0 0 20px;" valign="top">
+                          <strong>Description:</strong> {{ .Annotations.description }}
+                        </td>
+                      </tr>
+                      <tr style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; margin: 0;">
+                        <td class="content-block" style="font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; box-sizing: border-box; font-size: 14px; vertical-align: top; margin: 0; padding: 0 0 20px;" valign="top">
+                          <strong>Labels:</strong><br />
+                          {{ range .Labels.SortedPairs }}{{ .Name }}: {{ .Value }}<br />{{ end }}
+                        </td>
+                      </tr>
+                    </table>
+                    {{ end }}
+                  </td>
+                </tr>
+              </table>
+            </div>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+    {{ end }}
+
+---
+# PagerDuty integration (optional)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-pagerduty-config
+  namespace: pricing-agent-monitoring
+  labels:
+    app: alertmanager
+    component: monitoring
+data:
+  pagerduty.yml: |
+    global:
+      pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+    route:
+      routes:
+      - match:
+          severity: critical
+        receiver: 'pagerduty-critical'
+
+    receivers:
+    - name: 'pagerduty-critical'
+      pagerduty_configs:
+      - routing_key: 'YOUR-PAGERDUTY-INTEGRATION-KEY'
+        description: '{{ .GroupLabels.alertname }}: {{ .GroupLabels.instance }}'
+        details:
+          summary: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+          description: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+          severity: '{{ .GroupLabels.severity }}'
+        links:
+        - href: 'https://grafana.yourdomain.com'
+          text: 'Grafana Dashboard'

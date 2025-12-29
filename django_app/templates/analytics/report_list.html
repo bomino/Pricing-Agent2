@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Reports - AI Pricing Agent{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Page Header -->
+    <div class="mb-6 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-navy-900">Reports</h1>
+            <p class="text-gray-600 mt-1">View and manage analytics reports</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="/analytics/" class="px-4 py-2 text-navy-600 bg-white border border-navy-600 rounded-lg hover:bg-navy-50 transition-colors">
+                <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
+            </a>
+            <a href="/analytics/reports/generate/" class="px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors">
+                <i class="fas fa-plus mr-2"></i>Generate New Report
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Report Type</label>
+                <select class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500">
+                    <option value="">All Types</option>
+                    <option value="pricing">Pricing Analysis</option>
+                    <option value="procurement">Procurement Summary</option>
+                    <option value="supplier">Supplier Performance</option>
+                    <option value="cost">Cost Analysis</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500">
+                    <option value="">All Statuses</option>
+                    <option value="completed">Completed</option>
+                    <option value="generating">Generating</option>
+                    <option value="failed">Failed</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                <select class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500">
+                    <option value="7">Last 7 days</option>
+                    <option value="30" selected>Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="all">All time</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <button class="w-full px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors">
+                    <i class="fas fa-filter mr-2"></i>Apply Filters
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-navy-900">Available Reports</h2>
+        </div>
+        
+        {% if reports %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Report Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created By</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    {% for report in reports %}
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-medium text-navy-900">{{ report.name }}</div>
+                            {% if report.description %}
+                            <div class="text-xs text-gray-500">{{ report.description|truncatewords:10 }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if report.report_type == 'pricing' %}bg-blue-100 text-blue-800
+                                {% elif report.report_type == 'procurement' %}bg-green-100 text-green-800
+                                {% elif report.report_type == 'supplier' %}bg-purple-100 text-purple-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ report.report_type|title }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if report.status == 'completed' %}bg-green-100 text-green-800
+                                {% elif report.status == 'generating' %}bg-yellow-100 text-yellow-800
+                                {% elif report.status == 'failed' %}bg-red-100 text-red-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {% if report.status == 'generating' %}
+                                    <i class="fas fa-spinner fa-spin mr-1"></i>
+                                {% endif %}
+                                {{ report.status|title }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500">
+                            {{ report.created_at|date:"M d, Y" }}
+                            <div class="text-xs">{{ report.created_at|time:"g:i A" }}</div>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500">
+                            {{ report.created_by.get_full_name|default:report.created_by.username }}
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex space-x-2">
+                                {% if report.status == 'completed' %}
+                                <a href="/analytics/reports/{{ report.id }}/" 
+                                   class="text-navy-600 hover:text-navy-900 transition-colors"
+                                   title="View Report">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="/analytics/reports/{{ report.id }}/download/" 
+                                   class="text-green-600 hover:text-green-900 transition-colors"
+                                   title="Download">
+                                    <i class="fas fa-download"></i>
+                                </a>
+                                {% endif %}
+                                <button class="text-red-600 hover:text-red-900 transition-colors"
+                                        title="Delete"
+                                        onclick="if(confirm('Are you sure you want to delete this report?')) { /* Add delete logic */ }">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="px-6 py-4 border-t border-gray-200">
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-700">
+                    Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} reports
+                </div>
+                <div class="flex space-x-2">
+                    {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}" 
+                       class="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <span class="px-3 py-1 bg-navy-600 text-white rounded-lg">{{ num }}</span>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <a href="?page={{ num }}" 
+                           class="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                            {{ num }}
+                        </a>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}" 
+                       class="px-3 py-1 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <!-- Empty State -->
+        <div class="p-12 text-center">
+            <div class="mb-4">
+                <i class="fas fa-file-alt text-6xl text-gray-300"></i>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No Reports Available</h3>
+            <p class="text-gray-500 mb-6">Get started by generating your first report</p>
+            <a href="/analytics/reports/generate/" 
+               class="inline-flex items-center px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors">
+                <i class="fas fa-plus mr-2"></i>Generate New Report
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Total Reports</p>
+                    <p class="text-2xl font-bold text-navy-900 mt-1">{{ page_obj.paginator.count|default:"0" }}</p>
+                </div>
+                <div class="bg-navy-100 p-3 rounded-lg">
+                    <i class="fas fa-file-alt text-navy-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Generated This Month</p>
+                    <p class="text-2xl font-bold text-navy-900 mt-1">12</p>
+                </div>
+                <div class="bg-green-100 p-3 rounded-lg">
+                    <i class="fas fa-calendar text-green-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Most Common Type</p>
+                    <p class="text-lg font-bold text-navy-900 mt-1">Pricing Analysis</p>
+                </div>
+                <div class="bg-blue-100 p-3 rounded-lg">
+                    <i class="fas fa-chart-pie text-blue-600"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

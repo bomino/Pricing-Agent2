@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboards - Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+    .dashboard-card {
+        background: linear-gradient(135deg, rgba(30, 60, 114, 0.05), rgba(126, 63, 242, 0.05));
+        transition: all 0.3s ease;
+    }
+    .dashboard-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        background: linear-gradient(135deg, rgba(30, 60, 114, 0.1), rgba(126, 63, 242, 0.1));
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-navy-900">Analytics Dashboards</h1>
+        <p class="text-gray-600 mt-2">Manage and view your custom analytics dashboards</p>
+    </div>
+
+    <!-- Actions Bar -->
+    <div class="flex justify-between items-center mb-6">
+        <div class="flex space-x-2">
+            <button class="px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors">
+                <i class="fas fa-plus mr-2"></i>New Dashboard
+            </button>
+            <button class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <i class="fas fa-filter mr-2"></i>Filter
+            </button>
+        </div>
+        <div class="flex items-center space-x-2">
+            <input type="search" placeholder="Search dashboards..." 
+                   class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500">
+        </div>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for dashboard in dashboards %}
+        <div class="dashboard-card bg-white rounded-lg shadow-md p-6 cursor-pointer"
+             onclick="window.location.href='{% url 'analytics:dashboard_detail' dashboard.id %}'">
+            <div class="flex justify-between items-start mb-4">
+                <h3 class="text-lg font-semibold text-navy-900">{{ dashboard.name }}</h3>
+                <span class="px-2 py-1 text-xs rounded-full 
+                    {% if dashboard.is_active %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-600{% endif %}">
+                    {% if dashboard.is_active %}Active{% else %}Inactive{% endif %}
+                </span>
+            </div>
+            <p class="text-gray-600 text-sm mb-4">{{ dashboard.description|truncatewords:20 }}</p>
+            <div class="flex justify-between items-center text-sm text-gray-500">
+                <span><i class="fas fa-chart-bar mr-1"></i>{{ dashboard.widgets.count }} widgets</span>
+                <span>{{ dashboard.updated_at|date:"M d, Y" }}</span>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-span-full text-center py-12">
+            <i class="fas fa-chart-line text-6xl text-gray-300 mb-4"></i>
+            <p class="text-gray-500">No dashboards found</p>
+            <button class="mt-4 px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors">
+                Create Your First Dashboard
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

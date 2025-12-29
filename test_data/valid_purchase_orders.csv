@@ -1,0 +1,11 @@
+PO_Number,Supplier_Name,Supplier_Code,Material_Code,Material_Description,Quantity,Unit_Price,Total_Price,Currency,Purchase_Date,Delivery_Date,Notes
+PO-2024-001,ABC Construction Supplies Inc,SUP001,MAT001,Steel Beam I-Type 200x100x6m,50,185.75,9287.50,USD,2024-01-15,2024-02-01,Standard delivery
+PO-2024-002,XYZ Building Materials Ltd,SUP002,MAT002,Concrete Mix Grade M30,100,45.00,4500.00,USD,2024-01-16,2024-01-20,Urgent delivery
+PO-2024-003,ABC Construction Supplies Inc,SUP001,MAT003,Aluminum Sheet 3mm x 1.2m x 2.4m,75,125.50,9412.50,USD,2024-01-17,2024-02-05,
+PO-2024-004,Global Industrial Corp,SUP003,MAT004,Copper Wire 2.5mm dia,500,12.30,6150.00,USD,2024-01-18,2024-01-25,Bulk order discount applied
+PO-2024-005,XYZ Building Materials Ltd,SUP002,MAT005,Portland Cement Type I 50kg bags,200,8.50,1700.00,USD,2024-01-19,2024-01-22,
+PO-2024-006,Premium Suppliers LLC,SUP004,MAT006,PVC Pipe 110mm x 6m,150,22.75,3412.50,USD,2024-01-20,2024-02-10,
+PO-2024-007,ABC Construction Supplies Inc,SUP001,MAT001,Steel Beam I-Type 200x100x6m,100,183.00,18300.00,USD,2024-01-21,2024-02-15,Repeat order - slight price reduction
+PO-2024-008,Industrial Fasteners Co,SUP005,MAT007,Hex Bolt M20 x 100mm Grade 8.8,1000,0.85,850.00,USD,2024-01-22,2024-01-28,
+PO-2024-009,Global Industrial Corp,SUP003,MAT008,Welding Rod 3.2mm E6013,50,45.00,2250.00,USD,2024-01-23,2024-01-30,
+PO-2024-010,XYZ Building Materials Ltd,SUP002,MAT002,Concrete Mix Grade M30,150,44.50,6675.00,USD,2024-01-24,2024-01-27,Volume discount

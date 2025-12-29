@@ -1,0 +1,347 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}{% if object %}Edit Supplier{% else %}Add New Supplier{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center space-x-4">
+            <a href="{% url 'procurement:supplier_list' %}" 
+               class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                <i class="fas fa-arrow-left mr-2"></i> Back to Suppliers
+            </a>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">
+                    {% if object %}
+                        Edit Supplier: {{ object.name }}
+                    {% else %}
+                        Add New Supplier
+                    {% endif %}
+                </h1>
+                <p class="text-sm text-gray-600 mt-1">
+                    {% if object %}
+                        Update supplier information and details
+                    {% else %}
+                        Enter supplier information to add to your network
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+        
+        <!-- Basic Information -->
+        <div class="bg-white shadow-sm rounded-lg p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-building mr-2 text-navy-600"></i> Basic Information
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="id_name" class="block text-sm font-medium text-gray-700 mb-1">
+                        Supplier Name <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" name="name" id="id_name" 
+                           value="{{ form.name.value|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500"
+                           required>
+                    {% if form.name.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="id_code" class="block text-sm font-medium text-gray-700 mb-1">
+                        Supplier Code
+                    </label>
+                    <input type="text" name="code" id="id_code" 
+                           value="{{ form.code.value|default:'' }}"
+                           placeholder="Auto-generated if empty"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                    {% if form.code.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.code.errors.0 }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="id_supplier_type" class="block text-sm font-medium text-gray-700 mb-1">
+                        Supplier Type <span class="text-red-500">*</span>
+                    </label>
+                    <select name="supplier_type" id="id_supplier_type" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500"
+                            required>
+                        <option value="">Select Type</option>
+                        <option value="manufacturer" {% if form.supplier_type.value == 'manufacturer' %}selected{% endif %}>Manufacturer</option>
+                        <option value="distributor" {% if form.supplier_type.value == 'distributor' %}selected{% endif %}>Distributor</option>
+                        <option value="wholesaler" {% if form.supplier_type.value == 'wholesaler' %}selected{% endif %}>Wholesaler</option>
+                        <option value="reseller" {% if form.supplier_type.value == 'reseller' %}selected{% endif %}>Reseller</option>
+                        <option value="service_provider" {% if form.supplier_type.value == 'service_provider' %}selected{% endif %}>Service Provider</option>
+                        <option value="contractor" {% if form.supplier_type.value == 'contractor' %}selected{% endif %}>Contractor</option>
+                        <option value="consultant" {% if form.supplier_type.value == 'consultant' %}selected{% endif %}>Consultant</option>
+                        <option value="other" {% if form.supplier_type.value == 'other' %}selected{% endif %}>Other</option>
+                    </select>
+                    {% if form.supplier_type.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.supplier_type.errors.0 }}</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="id_website" class="block text-sm font-medium text-gray-700 mb-1">
+                        Website
+                    </label>
+                    <input type="url" name="website" id="id_website" 
+                           value="{{ form.website.value|default:'' }}"
+                           placeholder="https://example.com"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                    {% if form.website.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.website.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Contact Information -->
+        <div class="bg-white shadow-sm rounded-lg p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-user mr-2 text-navy-600"></i> Primary Contact
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label for="id_primary_contact_name" class="block text-sm font-medium text-gray-700 mb-1">
+                        Contact Name
+                    </label>
+                    <input type="text" name="primary_contact_name" id="id_primary_contact_name" 
+                           value="{{ form.primary_contact_name.value|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                
+                <div>
+                    <label for="id_primary_contact_email" class="block text-sm font-medium text-gray-700 mb-1">
+                        Contact Email
+                    </label>
+                    <input type="email" name="primary_contact_email" id="id_primary_contact_email" 
+                           value="{{ form.primary_contact_email.value|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                
+                <div>
+                    <label for="id_primary_contact_phone" class="block text-sm font-medium text-gray-700 mb-1">
+                        Contact Phone
+                    </label>
+                    <input type="tel" name="primary_contact_phone" id="id_primary_contact_phone" 
+                           value="{{ form.primary_contact_phone.value|default:'' }}"
+                           placeholder="+1234567890"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+            </div>
+        </div>
+
+        <!-- Location Information -->
+        <div class="bg-white shadow-sm rounded-lg p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-map-marker-alt mr-2 text-navy-600"></i> Location
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="id_country" class="block text-sm font-medium text-gray-700 mb-1">
+                        Country
+                    </label>
+                    <input type="text" name="country" id="id_country" 
+                           value="{{ form.country.value|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                
+                <div>
+                    <label for="id_region" class="block text-sm font-medium text-gray-700 mb-1">
+                        Region/State
+                    </label>
+                    <input type="text" name="region" id="id_region" 
+                           value="{{ form.region.value|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+            </div>
+        </div>
+
+        <!-- Business Information -->
+        <div class="bg-white shadow-sm rounded-lg p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-file-invoice mr-2 text-navy-600"></i> Business Details
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label for="id_tax_id" class="block text-sm font-medium text-gray-700 mb-1">
+                        Tax ID
+                    </label>
+                    <input type="text" name="tax_id" id="id_tax_id" 
+                           value="{{ form.tax_id.value|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                
+                <div>
+                    <label for="id_business_registration" class="block text-sm font-medium text-gray-700 mb-1">
+                        Business Registration
+                    </label>
+                    <input type="text" name="business_registration" id="id_business_registration" 
+                           value="{{ form.business_registration.value|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                
+                <div>
+                    <label for="id_legal_name" class="block text-sm font-medium text-gray-700 mb-1">
+                        Legal Name
+                    </label>
+                    <input type="text" name="legal_name" id="id_legal_name" 
+                           value="{{ form.legal_name.value|default:'' }}"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+            </div>
+        </div>
+
+        <!-- Financial Information -->
+        <div class="bg-white shadow-sm rounded-lg p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-dollar-sign mr-2 text-navy-600"></i> Financial Terms
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <label for="id_payment_terms" class="block text-sm font-medium text-gray-700 mb-1">
+                        Payment Terms
+                    </label>
+                    <input type="text" name="payment_terms" id="id_payment_terms" 
+                           value="{{ form.payment_terms.value|default:'' }}"
+                           placeholder="e.g., Net 30"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                
+                <div>
+                    <label for="id_currency" class="block text-sm font-medium text-gray-700 mb-1">
+                        Currency
+                    </label>
+                    <select name="currency" id="id_currency" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                        <option value="USD" {% if form.currency.value == 'USD' or not form.currency.value %}selected{% endif %}>USD</option>
+                        <option value="EUR" {% if form.currency.value == 'EUR' %}selected{% endif %}>EUR</option>
+                        <option value="GBP" {% if form.currency.value == 'GBP' %}selected{% endif %}>GBP</option>
+                        <option value="CAD" {% if form.currency.value == 'CAD' %}selected{% endif %}>CAD</option>
+                        <option value="AUD" {% if form.currency.value == 'AUD' %}selected{% endif %}>AUD</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="id_credit_limit" class="block text-sm font-medium text-gray-700 mb-1">
+                        Credit Limit
+                    </label>
+                    <input type="number" name="credit_limit" id="id_credit_limit" 
+                           value="{{ form.credit_limit.value|default:'' }}"
+                           step="0.01"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+            </div>
+        </div>
+
+        {% if object %}
+        <!-- Performance Metrics (Only for Edit) -->
+        <div class="bg-white shadow-sm rounded-lg p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-chart-line mr-2 text-navy-600"></i> Performance Metrics
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div>
+                    <label for="id_rating" class="block text-sm font-medium text-gray-700 mb-1">
+                        Rating (0-5)
+                    </label>
+                    <input type="number" name="rating" id="id_rating" 
+                           value="{{ form.rating.value|default:'' }}"
+                           step="0.1" min="0" max="5"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                
+                <div>
+                    <label for="id_on_time_delivery_rate" class="block text-sm font-medium text-gray-700 mb-1">
+                        On-Time Delivery (%)
+                    </label>
+                    <input type="number" name="on_time_delivery_rate" id="id_on_time_delivery_rate" 
+                           value="{{ form.on_time_delivery_rate.value|default:'' }}"
+                           step="0.01" min="0" max="100"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                
+                <div>
+                    <label for="id_quality_score" class="block text-sm font-medium text-gray-700 mb-1">
+                        Quality Score (%)
+                    </label>
+                    <input type="number" name="quality_score" id="id_quality_score" 
+                           value="{{ form.quality_score.value|default:'' }}"
+                           step="0.01" min="0" max="100"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                </div>
+                
+                <div>
+                    <label for="id_risk_level" class="block text-sm font-medium text-gray-700 mb-1">
+                        Risk Level
+                    </label>
+                    <select name="risk_level" id="id_risk_level" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                        <option value="low" {% if form.risk_level.value == 'low' %}selected{% endif %}>Low</option>
+                        <option value="medium" {% if form.risk_level.value == 'medium' or not form.risk_level.value %}selected{% endif %}>Medium</option>
+                        <option value="high" {% if form.risk_level.value == 'high' %}selected{% endif %}>High</option>
+                        <option value="critical" {% if form.risk_level.value == 'critical' %}selected{% endif %}>Critical</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Status (Only for Edit) -->
+        <div class="bg-white shadow-sm rounded-lg p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-toggle-on mr-2 text-navy-600"></i> Status
+            </h2>
+            <div>
+                <label for="id_status" class="block text-sm font-medium text-gray-700 mb-1">
+                    Supplier Status
+                </label>
+                <select name="status" id="id_status" 
+                        class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">
+                    <option value="active" {% if form.status.value == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if form.status.value == 'inactive' %}selected{% endif %}>Inactive</option>
+                    <option value="pending_approval" {% if form.status.value == 'pending_approval' %}selected{% endif %}>Pending Approval</option>
+                    <option value="suspended" {% if form.status.value == 'suspended' %}selected{% endif %}>Suspended</option>
+                    <option value="blacklisted" {% if form.status.value == 'blacklisted' %}selected{% endif %}>Blacklisted</option>
+                </select>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Notes -->
+        <div class="bg-white shadow-sm rounded-lg p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-sticky-note mr-2 text-navy-600"></i> Additional Information
+            </h2>
+            <div>
+                <label for="id_notes" class="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                </label>
+                <textarea name="notes" id="id_notes" rows="4"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-navy-500 focus:border-navy-500">{{ form.notes.value|default:'' }}</textarea>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end space-x-3">
+            <a href="{% url 'procurement:supplier_list' %}" 
+               class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+            </a>
+            <button type="submit" 
+                    class="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-navy-600 hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy-500">
+                <i class="fas fa-save mr-2"></i>
+                {% if object %}Update Supplier{% else %}Add Supplier{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

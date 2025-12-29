@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reset Button Test</title>
+    <style>
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button:enabled {
+            background-color: #dc2626;
+            color: white;
+            cursor: pointer;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+        }
+        button:enabled:hover {
+            background-color: #b91c1c;
+        }
+        .checkbox-container {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Reset Button Test</h1>
+        
+        <div class="checkbox-container">
+            <label>
+                <input type="checkbox" 
+                       id="testCheckbox" 
+                       onchange="toggleButton()">
+                Check this box to enable the button
+            </label>
+        </div>
+        
+        <button id="testButton" disabled>Reset All Data</button>
+        
+        <hr style="margin: 30px 0;">
+        
+        <div class="checkbox-container">
+            <label>
+                <input type="checkbox" 
+                       onchange="document.getElementById('testButton2').disabled = !this.checked;">
+                Alternative: Direct inline handler
+            </label>
+        </div>
+        
+        <button id="testButton2" disabled>Alternative Button</button>
+        
+        <script>
+            function toggleButton() {
+                const checkbox = document.getElementById('testCheckbox');
+                const button = document.getElementById('testButton');
+                button.disabled = !checkbox.checked;
+                console.log('Checkbox checked:', checkbox.checked);
+                console.log('Button disabled:', button.disabled);
+            }
+        </script>
+    </div>
+</body>
+</html>

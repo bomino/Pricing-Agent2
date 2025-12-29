@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Reset All Data - AI Pricing Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    .warning-box {
+        background: #fef2f2;
+        border: 2px solid #dc2626;
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+        margin: 1.5rem 0;
+    }
+    .data-summary {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    .data-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    .data-item:last-child {
+        border-bottom: none;
+    }
+    .option-group {
+        background: #f0f9ff;
+        border: 1px solid #0284c7;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6 max-w-4xl">
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <!-- Header -->
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-900 flex items-center">
+                <i class="fas fa-exclamation-triangle text-red-600 mr-3"></i>
+                Reset All Data
+            </h1>
+            <p class="text-gray-600 mt-2">
+                This will permanently delete all procurement and pricing data from the database.
+            </p>
+        </div>
+
+        <!-- Warning Box -->
+        <div class="warning-box">
+            <h3 class="text-lg font-semibold text-red-800 mb-3">
+                <i class="fas fa-skull-crossbones mr-2"></i>
+                DANGER ZONE - This action cannot be undone!
+            </h3>
+            <p class="text-red-700 mb-3">
+                This operation will DELETE the following data:
+            </p>
+            <ul class="list-disc list-inside text-red-700 space-y-1">
+                <li>All Purchase Orders and Order Lines</li>
+                <li>All RFQs and Quotes</li>
+                <li>All Price History Records</li>
+                <li>All Data Upload Records and Staging Data</li>
+                <li>All Analytics Reports</li>
+                <li>All Alerts and Benchmarks</li>
+            </ul>
+        </div>
+
+        <!-- Current Data Summary -->
+        <div class="data-summary">
+            <h3 class="text-lg font-semibold text-gray-900 mb-3">
+                <i class="fas fa-database mr-2"></i>
+                Current Database Contents
+            </h3>
+            <div class="space-y-1">
+                <div class="data-item">
+                    <span class="text-gray-600">Purchase Orders:</span>
+                    <span class="font-semibold text-navy-900">{{ total_pos|default:"0" }}</span>
+                </div>
+                <div class="data-item">
+                    <span class="text-gray-600">Suppliers:</span>
+                    <span class="font-semibold text-navy-900">{{ total_suppliers|default:"0" }}</span>
+                </div>
+                <div class="data-item">
+                    <span class="text-gray-600">Materials:</span>
+                    <span class="font-semibold text-navy-900">{{ total_materials|default:"0" }}</span>
+                </div>
+                <div class="data-item">
+                    <span class="text-gray-600">Data Uploads:</span>
+                    <span class="font-semibold text-navy-900">{{ total_uploads|default:"0" }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reset Form -->
+        <form method="post" action="{% url 'data_ingestion:reset_data' %}" id="resetForm">
+            {% csrf_token %}
+            
+            <!-- Options -->
+            <div class="option-group">
+                <h3 class="text-lg font-semibold text-blue-900 mb-3">
+                    <i class="fas fa-cog mr-2"></i>
+                    Reset Options
+                </h3>
+                
+                <div class="space-y-3">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" name="keep_suppliers" class="mr-3 h-4 w-4 text-blue-600">
+                        <span class="text-gray-700">
+                            <strong>Keep Supplier Master Data</strong>
+                            <span class="text-sm text-gray-500 ml-2">(Preserve supplier records)</span>
+                        </span>
+                    </label>
+                    
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" name="keep_materials" class="mr-3 h-4 w-4 text-blue-600">
+                        <span class="text-gray-700">
+                            <strong>Keep Material Master Data</strong>
+                            <span class="text-sm text-gray-500 ml-2">(Preserve materials and categories)</span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Confirmation -->
+            <div class="bg-gray-50 rounded p-4 mb-6">
+                <label class="flex items-start cursor-pointer">
+                    <input type="checkbox" 
+                           id="confirmReset" 
+                           name="confirm_reset"
+                           class="mr-3 mt-1 h-4 w-4 text-red-600" 
+                           onchange="console.log('Checkbox changed:', this.checked); var btn = document.getElementById('resetButton'); if(btn) { btn.disabled = !this.checked; console.log('Button disabled:', btn.disabled); } else { console.error('Button not found!'); }">
+                    <span class="text-gray-700">
+                        I understand that this action will <strong>permanently delete</strong> all procurement data 
+                        and cannot be undone. I have backed up any important data if needed.
+                    </span>
+                </label>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex justify-between items-center">
+                <a href="{% url 'data_ingestion:dashboard' %}" 
+                   class="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors">
+                    <i class="fas fa-arrow-left mr-2"></i>Cancel
+                </a>
+                
+                <button type="submit" 
+                        id="resetButton"
+                        class="px-6 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        disabled="disabled">
+                    <i class="fas fa-trash-alt mr-2"></i>Reset All Data
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Debug and ensure button enabling works
+window.onload = function() {
+    console.log('Page loaded - checking elements...');
+    
+    var checkbox = document.getElementById('confirmReset');
+    var button = document.getElementById('resetButton');
+    
+    if (checkbox) {
+        console.log('Checkbox found');
+    } else {
+        console.error('Checkbox NOT found!');
+    }
+    
+    if (button) {
+        console.log('Button found, disabled state:', button.disabled);
+    } else {
+        console.error('Button NOT found!');
+    }
+    
+    // Fallback method - poll for checkbox changes
+    if (checkbox && button) {
+        setInterval(function() {
+            if (checkbox.checked && button.disabled) {
+                button.disabled = false;
+                console.log('Button enabled via polling');
+            } else if (!checkbox.checked && !button.disabled) {
+                button.disabled = true;
+                console.log('Button disabled via polling');
+            }
+        }, 100);
+    }
+    
+    // Form submit handler
+    const resetForm = document.getElementById('resetForm');
+    if (resetForm) {
+        resetForm.addEventListener('submit', function(e) {
+            if (!confirm('⚠️ FINAL WARNING!\n\nThis will DELETE all procurement data.\n\nAre you absolutely sure?')) {
+                e.preventDefault();
+                return false;
+            }
+            // Show loading state
+            const btn = document.getElementById('resetButton');
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Resetting...';
+                btn.disabled = true;
+            }
+        });
+    }
+};
+</script>
+{% endblock %}

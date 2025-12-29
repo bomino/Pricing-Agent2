@@ -1,0 +1,182 @@
+<!-- Key Insights Tab Content -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <!-- Cost Savings Card -->
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-piggy-bank text-4xl text-green-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Cost Savings</h4>
+            <p class="text-3xl font-bold text-green-600 mb-2">$42,500</p>
+            <p class="text-sm text-gray-600">Identified this month</p>
+            <div class="mt-4">
+                <button class="text-sm text-green-600 hover:text-green-700 font-medium"
+                        hx-get="/analytics/savings/detailed/"
+                        hx-target="#modal-container">
+                    View Opportunities →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Price Anomalies Card -->
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-exclamation-triangle text-4xl text-orange-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Price Anomalies</h4>
+            <p class="text-3xl font-bold text-orange-600 mb-2">{{ anomalies|length|default:"0" }}</p>
+            <p class="text-sm text-gray-600">Require attention</p>
+            <div class="mt-4">
+                <button class="text-sm text-orange-600 hover:text-orange-700 font-medium"
+                        hx-get="/analytics/anomalies/list/"
+                        hx-target="#modal-container">
+                    Investigate All →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contract Compliance Card -->
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-file-contract text-4xl text-blue-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Contract Compliance</h4>
+            <p class="text-3xl font-bold text-blue-600 mb-2">{{ metrics.contract_compliance }}%</p>
+            <p class="text-sm text-gray-600">Compliance rate</p>
+            <div class="mt-4">
+                <button class="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        hx-get="/analytics/compliance/details/"
+                        hx-target="#modal-container">
+                    View Details →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Supplier Consolidation Card -->
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-compress-arrows-alt text-4xl text-purple-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Supplier Consolidation</h4>
+            <p class="text-3xl font-bold text-purple-600 mb-2">{{ metrics.supplier_consolidation }}%</p>
+            <p class="text-sm text-gray-600">Optimization opportunity</p>
+            <div class="mt-4">
+                <button class="text-sm text-purple-600 hover:text-purple-700 font-medium"
+                        hx-get="/analytics/consolidation/plan/"
+                        hx-target="#modal-container">
+                    View Strategy →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Maverick Spend Card -->
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-exclamation-circle text-4xl text-red-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Maverick Spend</h4>
+            <p class="text-3xl font-bold text-red-600 mb-2">{{ metrics.maverick_spend }}%</p>
+            <p class="text-sm text-gray-600">Off-contract purchases</p>
+            <div class="mt-4">
+                <button class="text-sm text-red-600 hover:text-red-700 font-medium"
+                        hx-get="/analytics/maverick/analysis/"
+                        hx-target="#modal-container">
+                    Analyze →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Insights Card -->
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-lightbulb text-4xl text-yellow-500 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Quick Insights</h4>
+            <p class="text-3xl font-bold text-yellow-600 mb-2">12</p>
+            <p class="text-sm text-gray-600">New recommendations</p>
+            <div class="mt-4">
+                <button class="text-sm text-yellow-600 hover:text-yellow-700 font-medium"
+                        hx-get="/analytics/insights/all/"
+                        hx-target="#modal-container">
+                    View All →
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Insights Section -->
+<div class="mt-6 bg-white rounded-lg border border-gray-200 p-6">
+    <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-navy-900">
+            <i class="fas fa-chart-line text-navy-600 mr-2"></i>
+            Top Opportunities & Actions
+        </h3>
+        <select class="form-select text-sm"
+                hx-get="/analytics/insights/filter/"
+                hx-target="#insights-list"
+                hx-trigger="change">
+            <option value="all">All Categories</option>
+            <option value="savings">Cost Savings</option>
+            <option value="compliance">Compliance</option>
+            <option value="efficiency">Efficiency</option>
+        </select>
+    </div>
+    
+    <div id="insights-list" class="space-y-3">
+        {% for opp in opportunities %}
+        <div class="flex justify-between items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+            <div class="flex items-start">
+                <div class="mr-3 mt-1">
+                    <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-dollar-sign text-green-600 text-sm"></i>
+                    </div>
+                </div>
+                <div>
+                    <p class="font-medium text-gray-900">{{ opp.material }}</p>
+                    <p class="text-sm text-gray-600 mt-1">{{ opp.recommendation }}</p>
+                    <div class="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                        <span><i class="fas fa-chart-bar mr-1"></i>{{ opp.data_points }} data points</span>
+                        <span><i class="fas fa-percentage mr-1"></i>{{ opp.potential_saving_pct }}% savings</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button class="btn btn-sm btn-outline"
+                        hx-get="/analytics/opportunity/{{ forloop.counter }}/details/"
+                        hx-target="#modal-container">
+                    Details
+                </button>
+                <button class="btn btn-sm btn-primary"
+                        hx-post="/analytics/opportunity/{{ forloop.counter }}/action/"
+                        hx-target="#modal-container">
+                    Take Action
+                </button>
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center py-8 text-gray-500">
+            <i class="fas fa-search text-4xl mb-3"></i>
+            <p>No opportunities identified yet</p>
+            <p class="text-sm mt-2">Continue uploading data to generate insights</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="mt-6 flex justify-center gap-3">
+    <button class="btn btn-primary" 
+            hx-get="/analytics/export/insights/"
+            hx-target="#download-container">
+        <i class="fas fa-download mr-2"></i>Export Insights
+    </button>
+    <button class="btn btn-outline" 
+            hx-get="/analytics/schedule-report/"
+            hx-target="#modal-container">
+        <i class="fas fa-calendar-plus mr-2"></i>Schedule Report
+    </button>
+    <button class="btn btn-outline" 
+            hx-get="/analytics/insights/settings/"
+            hx-target="#modal-container">
+        <i class="fas fa-cog mr-2"></i>Configure Alerts
+    </button>
+</div>

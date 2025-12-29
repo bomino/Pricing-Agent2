@@ -1,0 +1,476 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Data Ingestion Dashboard - AI Pricing Agent{% endblock %}
+
+{% block extra_head %}
+<style>
+    .upload-card {
+        transition: all 0.3s ease;
+        border: 1px solid #e5e7eb;
+    }
+    
+    .upload-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-processing { background: #dbeafe; color: #1e40af; }
+    .status-validating { background: #e0e7ff; color: #3730a3; }
+    .status-mapping { background: #ede9fe; color: #5b21b6; }
+    .status-completed { background: #d1fae5; color: #065f46; }
+    .status-failed { background: #fee2e2; color: #991b1b; }
+    
+    .progress-ring {
+        transform: rotate(-90deg);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: linear-gradient(135deg, #f0f4f8 0%, #ffffff 100%);
+        border-radius: 12px;
+        border: 2px dashed #cbd5e1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-navy-900">Data Ingestion Dashboard</h1>
+                <p class="text-gray-600 mt-1">Upload and process your procurement data</p>
+            </div>
+            <div class="flex gap-3">
+                {% if user.is_staff %}
+                <a href="{% url 'data_ingestion:reset_data' %}" 
+                   class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center"
+                   title="Reset all procurement data">
+                    <i class="fas fa-trash-alt mr-2"></i> Reset All Data
+                </a>
+                {% endif %}
+                <a href="/data-ingestion/upload/" class="px-6 py-3 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors flex items-center">
+                    <i class="fas fa-cloud-upload-alt mr-2"></i>
+                    Upload New File
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Total Uploads -->
+        <div class="bg-white rounded-lg shadow-sm upload-card p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Total Uploads</p>
+                    <p class="text-2xl font-bold text-navy-900 mt-1">{{ upload_stats.total_uploads|default:0 }}</p>
+                    <p class="text-xs text-gray-500 mt-2">All time</p>
+                </div>
+                <div class="p-3 bg-navy-100 rounded-lg">
+                    <i class="fas fa-file-upload text-navy-600 text-2xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Successful -->
+        <div class="bg-white rounded-lg shadow-sm upload-card p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Successful</p>
+                    <p class="text-2xl font-bold text-green-600 mt-1">{{ upload_stats.successful|default:0 }}</p>
+                    <p class="text-xs text-gray-500 mt-2">Completed processing</p>
+                </div>
+                <div class="p-3 bg-green-100 rounded-lg">
+                    <i class="fas fa-check-circle text-green-600 text-2xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- In Progress -->
+        <div class="bg-white rounded-lg shadow-sm upload-card p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">In Progress</p>
+                    <p class="text-2xl font-bold text-blue-600 mt-1">{{ upload_stats.pending|default:0 }}</p>
+                    <p class="text-xs text-gray-500 mt-2">Being processed</p>
+                </div>
+                <div class="p-3 bg-blue-100 rounded-lg">
+                    <i class="fas fa-spinner fa-spin text-blue-600 text-2xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Success Rate -->
+        <div class="bg-white rounded-lg shadow-sm upload-card p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Success Rate</p>
+                    <p class="text-2xl font-bold text-navy-900 mt-1">
+                        {% if upload_stats.total_uploads > 0 %}
+                            {{ upload_stats.successful|default:0|floatformat:0|add:"00"|slice:"-2:" }}%
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </p>
+                    <p class="text-xs text-gray-500 mt-2">Processing success</p>
+                </div>
+                <div class="relative">
+                    <svg class="w-16 h-16">
+                        <circle cx="32" cy="32" r="28" stroke="#e5e7eb" stroke-width="4" fill="none"/>
+                        <circle cx="32" cy="32" r="28" stroke="#243b53" stroke-width="4" fill="none"
+                                class="progress-ring"
+                                stroke-dasharray="176"
+                                stroke-dashoffset="{% if upload_stats.total_uploads > 0 %}{{ 176|add:"-"|add:upload_stats.successful|default:0|floatformat:0|add:"00"|slice:"-2:"|add:"76"|slice:"-3:" }}{% else %}176{% endif %}"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <!-- Upload Methods -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 class="text-lg font-semibold text-navy-900 mb-4">
+                <i class="fas fa-rocket mr-2"></i>Quick Start
+            </h3>
+            <div class="space-y-3">
+                <a href="/data-ingestion/upload/?type=purchase_orders" class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <span class="text-sm font-medium text-gray-700">Upload Purchase Orders</span>
+                    <i class="fas fa-arrow-right text-gray-400"></i>
+                </a>
+                <a href="/data-ingestion/upload/?type=invoices" class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <span class="text-sm font-medium text-gray-700">Upload Invoices</span>
+                    <i class="fas fa-arrow-right text-gray-400"></i>
+                </a>
+                <a href="/data-ingestion/upload/?type=price_history" class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <span class="text-sm font-medium text-gray-700">Upload Price History</span>
+                    <i class="fas fa-arrow-right text-gray-400"></i>
+                </a>
+            </div>
+        </div>
+
+        <!-- Supported Formats -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 class="text-lg font-semibold text-navy-900 mb-4">
+                <i class="fas fa-file-alt mr-2"></i>Supported Formats
+            </h3>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="flex items-center">
+                    <i class="fas fa-file-csv text-green-600 mr-2"></i>
+                    <span class="text-sm text-gray-700">CSV Files</span>
+                </div>
+                <div class="flex items-center">
+                    <i class="fas fa-file-excel text-green-600 mr-2"></i>
+                    <span class="text-sm text-gray-700">Excel (XLSX)</span>
+                </div>
+                <div class="flex items-center">
+                    <i class="fas fa-file-excel text-green-600 mr-2"></i>
+                    <span class="text-sm text-gray-700">Excel (XLS)</span>
+                </div>
+                <div class="flex items-center">
+                    <i class="fas fa-database text-purple-600 mr-2"></i>
+                    <span class="text-sm text-gray-700">Parquet</span>
+                </div>
+            </div>
+            <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p class="text-xs text-blue-800">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Maximum file size: 50MB
+                </p>
+            </div>
+        </div>
+
+        <!-- Help & Resources -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 class="text-lg font-semibold text-navy-900 mb-4">
+                <i class="fas fa-question-circle mr-2"></i>Help & Resources
+            </h3>
+            <ul class="space-y-3">
+                <li>
+                    <a href="#" class="text-sm text-blue-600 hover:text-blue-800 flex items-center">
+                        <i class="fas fa-book mr-2"></i>Data Format Guide
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="text-sm text-blue-600 hover:text-blue-800 flex items-center">
+                        <i class="fas fa-download mr-2"></i>Download Sample Templates
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="text-sm text-blue-600 hover:text-blue-800 flex items-center">
+                        <i class="fas fa-video mr-2"></i>Video Tutorial
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Recent Uploads -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-navy-800 to-navy-700 rounded-t-lg">
+            <h2 class="text-lg font-semibold text-white flex items-center">
+                <i class="fas fa-history mr-2"></i>Recent Uploads
+            </h2>
+        </div>
+        
+        {% if recent_uploads %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">File Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded By</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rows</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for upload in recent_uploads %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <i class="fas fa-file-alt text-gray-400 mr-3"></i>
+                                <div>
+                                    <div class="text-sm font-medium text-gray-900">{{ upload.original_filename|truncatechars:30 }}</div>
+                                    <div class="text-xs text-gray-500">{{ upload.file_format|upper }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="text-sm text-gray-900">{{ upload.get_data_type_display|default:upload.data_type|title }}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="text-sm text-gray-900">{{ upload.uploaded_by.get_full_name|default:upload.uploaded_by.username }}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="text-sm text-gray-900">{{ upload.created_at|date:"M d, Y" }}</span>
+                            <span class="text-xs text-gray-500 block">{{ upload.created_at|time:"H:i" }}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="text-sm text-gray-900">{{ upload.total_rows|default:"-" }}</span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 py-1 text-xs rounded-full
+                                {% if upload.status == 'completed' %}bg-green-100 text-green-800
+                                {% elif upload.status == 'ready_to_process' %}bg-blue-100 text-blue-800
+                                {% elif upload.status == 'processing' %}bg-yellow-100 text-yellow-800
+                                {% elif upload.status == 'failed' %}bg-red-100 text-red-800
+                                {% elif upload.status == 'mapping' %}bg-purple-100 text-purple-800
+                                {% elif upload.status == 'validating' %}bg-orange-100 text-orange-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {% if upload.status == 'processing' %}
+                                    <i class="fas fa-spinner fa-spin mr-1"></i>
+                                {% elif upload.status == 'ready_to_process' %}
+                                    <i class="fas fa-play-circle mr-1"></i>
+                                {% elif upload.status == 'completed' %}
+                                    <i class="fas fa-check-circle mr-1"></i>
+                                {% endif %}
+                                {% if upload.status == 'ready_to_process' %}
+                                    Ready to Process
+                                {% else %}
+                                    {{ upload.status|title }}
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                            <div class="flex items-center justify-center space-x-2">
+                                <!-- View Details link for all statuses -->
+                                <a href="{% url 'data_ingestion:upload_detail' upload.id %}"
+                                   class="text-blue-600 hover:text-blue-900"
+                                   title="View details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+
+                                {% if upload.status == 'mapping' %}
+                                    <a href="/data-ingestion/mapping/{{ upload.id }}/"
+                                       class="text-yellow-600 hover:text-yellow-900"
+                                       title="Continue mapping">
+                                        <i class="fas fa-project-diagram"></i>
+                                    </a>
+                                {% elif upload.status == 'validating' %}
+                                    <a href="/data-ingestion/validation/{{ upload.id }}/"
+                                       class="text-yellow-600 hover:text-yellow-900"
+                                       title="Review validation">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </a>
+                                {% elif upload.status == 'ready_to_process' %}
+                                    <a href="/data-ingestion/process-to-main/{{ upload.id }}/"
+                                       class="text-green-600 hover:text-green-900"
+                                       title="Process to main tables">
+                                        <i class="fas fa-play-circle"></i>
+                                    </a>
+                                {% elif upload.status == 'completed' %}
+                                    <span class="text-green-600" title="Processing complete">
+                                        <i class="fas fa-check-circle"></i>
+                                    </span>
+                                {% endif %}
+
+                                <button onclick="confirmDelete('{{ upload.id }}', '{{ upload.original_filename|escapejs }}')"
+                                        class="text-red-600 hover:text-red-900"
+                                        title="Delete upload">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <!-- Empty State -->
+        <div class="p-8">
+            <div class="empty-state">
+                <i class="fas fa-inbox text-6xl text-gray-400 mb-4"></i>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">No uploads yet</h3>
+                <p class="text-gray-600 mb-6">Start by uploading your first procurement data file</p>
+                <a href="/data-ingestion/upload/" class="inline-flex items-center px-6 py-3 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors">
+                    <i class="fas fa-cloud-upload-alt mr-2"></i>
+                    Upload Your First File
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Processing Queue (if any in progress) -->
+    {% if upload_stats.pending > 0 %}
+    <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <div class="flex items-center">
+            <i class="fas fa-info-circle text-blue-600 text-xl mr-3"></i>
+            <div>
+                <h4 class="text-lg font-semibold text-blue-900">Processing Queue</h4>
+                <p class="text-sm text-blue-800 mt-1">
+                    {{ upload_stats.pending }} file{{ upload_stats.pending|pluralize }} currently being processed.
+                    Processing typically takes 2-5 minutes depending on file size.
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Auto-refresh if there are pending uploads
+{% if upload_stats.pending > 0 %}
+setTimeout(function() {
+    location.reload();
+}, 30000); // Refresh every 30 seconds
+{% endif %}
+
+// Delete confirmation dialog
+function confirmDelete(uploadId, filename) {
+    // Create confirmation dialog using Alpine.js modal or native confirm
+    if (confirm(`Are you sure you want to delete "${filename}"?\n\nThis will permanently remove:\n- The uploaded file\n- All staging data\n- All processing logs\n\nThis action cannot be undone.`)) {
+        deleteUpload(uploadId);
+    }
+}
+
+// Delete upload function
+function deleteUpload(uploadId) {
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+    
+    // Show loading state
+    const deleteBtn = event.target.closest('button');
+    if (deleteBtn) {
+        deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        deleteBtn.disabled = true;
+    }
+    
+    // Send delete request
+    fetch(`/data-ingestion/delete/${uploadId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            showToast(`Successfully deleted upload`, 'success');
+            // Reload page to update list
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(data.error || 'Failed to delete upload', 'error');
+            // Restore button
+            if (deleteBtn) {
+                deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+                deleteBtn.disabled = false;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('An error occurred while deleting', 'error');
+        // Restore button
+        if (deleteBtn) {
+            deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+            deleteBtn.disabled = false;
+        }
+    });
+}
+
+// Toast notification function (if not already defined)
+function showToast(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 ${
+        type === 'success' ? 'bg-green-500 text-white' :
+        type === 'error' ? 'bg-red-500 text-white' :
+        'bg-blue-500 text-white'
+    }`;
+    toast.innerHTML = `
+        <div class="flex items-center">
+            <i class="fas ${
+                type === 'success' ? 'fa-check-circle' :
+                type === 'error' ? 'fa-exclamation-circle' :
+                'fa-info-circle'
+            } mr-2"></i>
+            <span>${message}</span>
+        </div>
+    `;
+    
+    // Add to page
+    document.body.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+        toast.style.opacity = '1';
+        toast.style.transform = 'translateX(0)';
+    }, 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 300);
+    }, 3000);
+}
+</script>
+{% endblock %}

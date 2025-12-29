@@ -1,0 +1,86 @@
+<!-- HTMX partial for upload progress -->
+<div id="progress-container" class="p-4 rounded-lg border 
+     {% if upload.status == 'completed' %}bg-green-50 border-green-200
+     {% elif upload.status == 'failed' %}bg-red-50 border-red-200
+     {% else %}bg-blue-50 border-blue-200{% endif %}">
+    
+    <div class="flex items-center justify-between">
+        <div class="flex items-center">
+            {% if upload.status == 'processing' %}
+                <i class="fas fa-spinner fa-spin text-blue-600 text-xl mr-3"></i>
+            {% elif upload.status == 'completed' %}
+                <i class="fas fa-check-circle text-green-600 text-xl mr-3"></i>
+            {% elif upload.status == 'failed' %}
+                <i class="fas fa-times-circle text-red-600 text-xl mr-3"></i>
+            {% else %}
+                <i class="fas fa-clock text-gray-600 text-xl mr-3"></i>
+            {% endif %}
+            
+            <div>
+                <p class="font-semibold 
+                   {% if upload.status == 'completed' %}text-green-900
+                   {% elif upload.status == 'failed' %}text-red-900
+                   {% else %}text-blue-900{% endif %}">
+                    {{ upload.original_filename }}
+                </p>
+                <p class="text-sm 
+                   {% if upload.status == 'completed' %}text-green-700
+                   {% elif upload.status == 'failed' %}text-red-700
+                   {% else %}text-blue-700{% endif %}">
+                    Status: {{ upload.get_status_display|default:upload.status|title }}
+                    {% if upload.status == 'processing' and percentage %}
+                        • {{ percentage }}% complete
+                    {% elif upload.status == 'completed' %}
+                        • {{ upload.processed_rows }} rows processed
+                    {% elif upload.status == 'failed' %}
+                        • {{ upload.error_message|truncatewords:10 }}
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        
+        {% if upload.status == 'processing' %}
+        <div class="w-48">
+            <div class="w-full bg-gray-200 rounded-full h-3">
+                <div class="bg-blue-600 h-3 rounded-full transition-all duration-500 ease-out" 
+                     style="width: {{ percentage|default:0 }}%"></div>
+            </div>
+            <p class="text-xs text-gray-600 mt-1 text-center">
+                {{ upload.processed_rows|default:0 }} / {{ upload.total_rows|default:0 }} records
+            </p>
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if upload.status == 'processing' and upload.processing_started_at %}
+    <div class="mt-3 text-sm text-gray-600">
+        <i class="fas fa-clock mr-1"></i>
+        Processing started {{ upload.processing_started_at|timesince }} ago
+    </div>
+    {% endif %}
+</div>
+
+{% if upload.status == 'completed' %}
+<script>
+    // Stop polling when completed
+    document.body.dispatchEvent(new CustomEvent('upload-complete', { 
+        detail: { uploadId: '{{ upload.id }}' }
+    }));
+</script>
+{% elif upload.status == 'failed' %}
+<script>
+    // Stop polling on failure
+    document.body.dispatchEvent(new CustomEvent('upload-failed', { 
+        detail: { 
+            uploadId: '{{ upload.id }}',
+            error: '{{ upload.error_message|escapejs }}'
+        }
+    }));
+</script>
+{% else %}
+<!-- Continue polling -->
+<div hx-get="/data-ingestion/progress/{{ upload.id }}/" 
+     hx-trigger="load delay:2s"
+     hx-target="this"
+     hx-swap="outerHTML"></div>
+{% endif %}

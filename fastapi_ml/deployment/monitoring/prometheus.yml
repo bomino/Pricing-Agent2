@@ -1,0 +1,83 @@
+# Prometheus Configuration for AI Pricing Agent ML Service
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'pricing-agent-production'
+    replica: 'prometheus-1'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Rule files
+rule_files:
+  - "alert_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+
+  # ML Service metrics
+  - job_name: 'ml-service'
+    static_configs:
+      - targets: ['ml-service:9090']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    scrape_timeout: 10s
+    params:
+      format: ['prometheus']
+
+  # PostgreSQL metrics (if using postgres_exporter)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+
+  # Redis metrics (if using redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 30s
+
+  # Node exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+
+  # MLflow metrics (if available)
+  - job_name: 'mlflow'
+    static_configs:
+      - targets: ['mlflow-server:5000']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  # Custom application metrics
+  - job_name: 'pricing-models'
+    static_configs:
+      - targets: ['ml-service:9090']
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+    params:
+      module: ['ml_models']
+
+# Remote write configuration (optional, for long-term storage)
+# remote_write:
+#   - url: "https://prometheus-remote-write-endpoint.example.com/api/v1/write"
+#     basic_auth:
+#       username: "prometheus"
+#       password: "your-password"
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 10GB

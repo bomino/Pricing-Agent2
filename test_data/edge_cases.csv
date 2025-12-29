@@ -1,0 +1,21 @@
+PO_Number,Supplier_Name,Supplier_Code,Material_Code,Material_Description,Quantity,Unit_Price,Total_Price,Currency,Purchase_Date,Delivery_Date,Notes
+PO-EDGE-001,O'Reilly & Associates Inc.,SUP-SP01,,Steel Beam with "special" specs,100.5,99.999,10049.90,USD,2024-01-15,2024-02-01,Name with apostrophe and ampersand
+PO-EDGE-002,Müller GmbH & Co. KG,SUP-SP02,MAT/SP-01,Concrete Mix (Grade 30/40),1000.00,45.00,45000.00,EUR,2024-01-16,2024-01-20,European supplier with umlauts
+PO-EDGE-003,José's Construction S.A.,SUP-SP03,MAT.SP.02,Aluminum-Steel Composite 10mm×20mm,0.5,1250.50,625.25,USD,2024-01-17,2024-02-05,Small quantity high value
+PO-EDGE-004,北京建筑材料公司,SUP-CN01,MAT-CN001,高强度钢筋 16mm,500,35.00,17500.00,CNY,2024-01-18,2024-02-10,Chinese characters in name
+PO-EDGE-005,Smith/Jones & Partners (Pty) Ltd.,SUP-SP04,MAT|SP|03,PVC/CPVC Hybrid Pipe 4",200,18.75,3750.00,GBP,2024-01-19,2024-01-25,Complex punctuation
+PO-EDGE-006,,,MAT-NOSUP,Material without supplier info,100,50.00,5000.00,USD,2024-01-20,2024-02-01,Missing supplier data
+PO-EDGE-007,Supplier Without Code,,MAT-TEST,Test Material Description,50,25.00,1250.00,USD,2024-01-21,2024-02-05,Missing supplier code
+PO-EDGE-008,Test Supplier,SUP-NEG,MAT-NEG,Should handle negative gracefully,-10,25.00,-250.00,USD,2024-01-22,2024-01-30,Negative quantity test
+PO-EDGE-009,Zero Price Supplier,SUP-ZERO,MAT-ZERO,Zero price material,100,0.00,0.00,USD,2024-01-23,2024-02-01,Zero price test
+PO-EDGE-010,Very Long Supplier Name That Exceeds Normal Database Field Limits And Tests Truncation Handling In The System Processing Pipeline With Additional Characters To Make It Even Longer,SUP-LONG,MAT-LONG,This is an extremely long material description that tests how the system handles descriptions that exceed typical database field length limits and whether proper truncation or handling is implemented in the data processing pipeline with even more text added,999999.99,99999.99,99999899000.10,USD,2024-01-24,2024-12-31,Testing field length limits
+,Duplicate PO Test,SUP-DUP,MAT-DUP1,First duplicate PO entry,100,50.00,5000.00,USD,2024-01-25,2024-02-10,Missing PO number
+PO-EDGE-001,Duplicate PO Test,SUP-DUP,MAT-DUP2,Duplicate PO number test,200,75.00,15000.00,USD,2024-01-26,2024-02-15,Duplicate PO number
+PO-EDGE-011,Société Générale S.A.,SUP-FR01,MAT-FR01,Matériel de construction métallique,100,85.50,8550.00,EUR,2024-01-27,2024-02-20,French accents
+PO-EDGE-012,Supplier @#$%,SUP-SPEC,MAT&SPEC,Material!@#$%^&*(),50,25.00,1250.00,USD,2024-01-28,2024-02-25,Special characters everywhere
+PO-EDGE-013,   Spaces Supplier   ,  SUP-SPC  ,  MAT-SPC  ,   Material with spaces   ,100,50.00,5000.00,USD,2024-01-29,2024-03-01,Leading/trailing spaces
+PO-EDGE-014,Case SENSITIVE Test,sup-case,mat-case,UPPERCASE lowercase MiXeD,100,50.00,5000.00,USD,2024-01-30,2024-03-05,Case sensitivity test
+PO-EDGE-015,Future Date Supplier,SUP-FUT,MAT-FUT,Future dated material,100,100.00,10000.00,USD,2099-12-31,2100-01-15,Future dates
+PO-EDGE-016,Past Date Supplier,SUP-PAST,MAT-PAST,Historical material,100,10.00,1000.00,USD,1990-01-01,1990-02-01,Very old dates
+PO-EDGE-017,Invalid Date Supplier,SUP-INVDT,MAT-INVDT,Invalid date material,100,50.00,5000.00,USD,not-a-date,invalid-date,Invalid date format
+PO-EDGE-018,Multi Currency Test,SUP-MULTI,MAT-MULTI,Japanese Yen test,10000,1.5,15000.00,JPY,2024-01-31,2024-02-28,Large quantity for JPY

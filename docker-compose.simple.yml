@@ -1,0 +1,122 @@
+services:
+  # PostgreSQL with TimescaleDB
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: pricing_postgres
+    environment:
+      POSTGRES_DB: pricing_agent
+      POSTGRES_USER: pricing_user
+      POSTGRES_PASSWORD: pricing_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pricing_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pricing_network
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: pricing_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pricing_network
+
+  # Django Application
+  django:
+    build:
+      context: .
+      dockerfile: Dockerfile.django.simple
+    container_name: pricing_django
+    environment:
+      DEBUG: 'True'
+      SECRET_KEY: 'dev-secret-key-change-in-production'
+      DATABASE_URL: 'postgres://pricing_user:pricing_password@postgres:5432/pricing_agent'
+      DB_NAME: 'pricing_agent'
+      DB_USER: 'pricing_user'
+      DB_PASSWORD: 'pricing_password'
+      DB_HOST: 'postgres'
+      DB_PORT: '5432'
+      REDIS_URL: 'redis://redis:6379/0'
+      ALLOWED_HOSTS: '*'
+    volumes:
+      - ./django_app:/app/django_app
+      - ./static:/app/static
+      - ./media:/app/media
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pricing_network
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        python manage.py migrate --noinput &&
+        python manage.py collectstatic --noinput &&
+        echo 'Starting Django server...' &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+
+  # MailHog for email testing
+  mailhog:
+    image: mailhog/mailhog
+    container_name: pricing_mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - pricing_network
+
+  # Celery Worker (optional - comment out if not needed immediately)
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile.django.simple
+    container_name: pricing_celery
+    environment:
+      DEBUG: 'True'
+      SECRET_KEY: 'dev-secret-key-change-in-production'
+      DATABASE_URL: 'postgres://pricing_user:pricing_password@postgres:5432/pricing_agent'
+      DB_NAME: 'pricing_agent'
+      DB_USER: 'pricing_user'
+      DB_PASSWORD: 'pricing_password'
+      DB_HOST: 'postgres'
+      DB_PORT: '5432'
+      REDIS_URL: 'redis://redis:6379/0'
+    volumes:
+      - ./django_app:/app/django_app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pricing_network
+    working_dir: /app/django_app
+    command: celery -A pricing_agent worker --loglevel=info
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  pricing_network:
+    driver: bridge

@@ -1,0 +1,514 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}{% if object %}Edit RFQ{% else %}Create RFQ{% endif %}{% endblock %}
+
+{% block extra_css %}
+<!-- Flatpickr CSS for better date picker -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/airbnb.css">
+<style>
+    .flatpickr-calendar {
+        font-family: system-ui, -apple-system, sans-serif;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        border: 1px solid #e5e7eb;
+    }
+    .flatpickr-day.selected {
+        background: #1e3a8a;
+        border-color: #1e3a8a;
+    }
+    .flatpickr-day.today {
+        border-color: #3b82f6;
+    }
+    .flatpickr-time input:hover, 
+    .flatpickr-time .flatpickr-am-pm:hover, 
+    .flatpickr-time input:focus, 
+    .flatpickr-time .flatpickr-am-pm:focus {
+        background: #f3f4f6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Header Section -->
+    <div class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <a href="{% url 'procurement:rfq_list' %}" 
+                       class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                        <i class="fas fa-arrow-left mr-2"></i> Back to RFQs
+                    </a>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">
+                            {% if object %}
+                                Edit RFQ: {{ object.rfq_number }}
+                            {% else %}
+                                Create New Request for Quote
+                            {% endif %}
+                        </h1>
+                        <p class="mt-1 text-sm text-gray-600">
+                            {% if object %}
+                                Modify the details of your RFQ below
+                            {% else %}
+                                Fill out the form below to request quotes from suppliers
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                {% if object %}
+                <div class="flex items-center space-x-2">
+                    <span class="px-3 py-1 rounded-full text-sm font-medium
+                        {% if object.status == 'draft' %}bg-gray-100 text-gray-800
+                        {% elif object.status == 'published' %}bg-blue-100 text-blue-800
+                        {% elif object.status == 'closed' %}bg-red-100 text-red-800
+                        {% else %}bg-green-100 text-green-800{% endif %}">
+                        {{ object.get_status_display }}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Indicator for New RFQ -->
+    {% if not object %}
+    <div class="bg-white border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-full bg-navy-600 text-white text-sm font-bold">1</div>
+                        <span class="ml-2 text-sm font-medium text-gray-900">Basic Info</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                    <div class="flex items-center">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-full bg-gray-300 text-white text-sm font-bold">2</div>
+                        <span class="ml-2 text-sm text-gray-500">Items</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                    <div class="flex items-center">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-full bg-gray-300 text-white text-sm font-bold">3</div>
+                        <span class="ml-2 text-sm text-gray-500">Suppliers</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-400"></i>
+                    <div class="flex items-center">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-full bg-gray-300 text-white text-sm font-bold">4</div>
+                        <span class="ml-2 text-sm text-gray-500">Review</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Main Form Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form method="post" class="space-y-8">
+            {% csrf_token %}
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Main Column (2/3 width) -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Basic Information Card -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                            <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                                <i class="fas fa-info-circle mr-2 text-navy-600"></i>
+                                Basic Information
+                            </h2>
+                        </div>
+                        <div class="p-6 space-y-6">
+                            <div>
+                                <label for="id_title" class="block text-sm font-medium text-gray-700 mb-2">
+                                    RFQ Title <span class="text-red-500">*</span>
+                                </label>
+                                {{ form.title }}
+                                {% if form.title.errors %}
+                                <p class="mt-1 text-sm text-red-600 flex items-center">
+                                    <i class="fas fa-exclamation-circle mr-1"></i>
+                                    {{ form.title.errors.0 }}
+                                </p>
+                                {% endif %}
+                                <p class="mt-1 text-xs text-gray-500">Provide a clear, descriptive title for your RFQ</p>
+                            </div>
+                            
+                            <div>
+                                <label for="id_description" class="block text-sm font-medium text-gray-700 mb-2">
+                                    Detailed Description <span class="text-red-500">*</span>
+                                </label>
+                                {{ form.description }}
+                                {% if form.description.errors %}
+                                <p class="mt-1 text-sm text-red-600 flex items-center">
+                                    <i class="fas fa-exclamation-circle mr-1"></i>
+                                    {{ form.description.errors.0 }}
+                                </p>
+                                {% endif %}
+                                <p class="mt-1 text-xs text-gray-500">Include all relevant details, specifications, and requirements</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timeline & Delivery Card -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                            <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                                <i class="fas fa-calendar-alt mr-2 text-navy-600"></i>
+                                Timeline & Delivery
+                            </h2>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="id_deadline" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Response Deadline <span class="text-red-500">*</span>
+                                    </label>
+                                    {{ form.deadline }}
+                                    {% if form.deadline.errors %}
+                                    <p class="mt-1 text-sm text-red-600 flex items-center">
+                                        <i class="fas fa-exclamation-circle mr-1"></i>
+                                        {{ form.deadline.errors.0 }}
+                                    </p>
+                                    {% endif %}
+                                    <p class="mt-1 text-xs text-gray-500">When do you need quotes by?</p>
+                                </div>
+                                
+                                <div>
+                                    <label for="id_required_delivery_date" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Expected Delivery Date
+                                    </label>
+                                    {{ form.required_delivery_date }}
+                                    {% if form.required_delivery_date.errors %}
+                                    <p class="mt-1 text-sm text-red-600 flex items-center">
+                                        <i class="fas fa-exclamation-circle mr-1"></i>
+                                        {{ form.required_delivery_date.errors.0 }}
+                                    </p>
+                                    {% endif %}
+                                    <p class="mt-1 text-xs text-gray-500">When do you need the items delivered?</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Commercial Terms Card -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                            <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                                <i class="fas fa-file-contract mr-2 text-navy-600"></i>
+                                Commercial Terms
+                            </h2>
+                        </div>
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                <div>
+                                    <label for="id_payment_terms" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Payment Terms
+                                    </label>
+                                    {{ form.payment_terms }}
+                                    {% if form.payment_terms.errors %}
+                                    <p class="mt-1 text-sm text-red-600 flex items-center">
+                                        <i class="fas fa-exclamation-circle mr-1"></i>
+                                        {{ form.payment_terms.errors.0 }}
+                                    </p>
+                                    {% endif %}
+                                    <p class="mt-1 text-xs text-gray-500">e.g., Net 30, 2/10 Net 30</p>
+                                </div>
+                                
+                                <div>
+                                    <label for="id_delivery_terms" class="block text-sm font-medium text-gray-700 mb-2">
+                                        Delivery Terms
+                                    </label>
+                                    {{ form.delivery_terms }}
+                                    {% if form.delivery_terms.errors %}
+                                    <p class="mt-1 text-sm text-red-600 flex items-center">
+                                        <i class="fas fa-exclamation-circle mr-1"></i>
+                                        {{ form.delivery_terms.errors.0 }}
+                                    </p>
+                                    {% endif %}
+                                    <p class="mt-1 text-xs text-gray-500">e.g., FOB, CIF, DDP</p>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label for="id_terms_and_conditions" class="block text-sm font-medium text-gray-700 mb-2">
+                                    Additional Terms & Conditions
+                                </label>
+                                {{ form.terms_and_conditions }}
+                                {% if form.terms_and_conditions.errors %}
+                                <p class="mt-1 text-sm text-red-600 flex items-center">
+                                    <i class="fas fa-exclamation-circle mr-1"></i>
+                                    {{ form.terms_and_conditions.errors.0 }}
+                                </p>
+                                {% endif %}
+                                <p class="mt-1 text-xs text-gray-500">Any special terms, conditions, or requirements</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sidebar (1/3 width) -->
+                <div class="lg:col-span-1 space-y-6">
+                    <!-- Quick Info Card -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                            <h2 class="text-lg font-semibold text-gray-900">Quick Info</h2>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            {% if object %}
+                            <div>
+                                <p class="text-sm text-gray-600">RFQ Number</p>
+                                <p class="font-semibold">{{ object.rfq_number }}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600">Created By</p>
+                                <p class="font-semibold">{{ object.created_by.get_full_name }}</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-600">Created On</p>
+                                <p class="font-semibold">{{ object.created_at|date:"M d, Y" }}</p>
+                            </div>
+                            {% else %}
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                <div class="flex">
+                                    <i class="fas fa-info-circle text-blue-600 mt-0.5"></i>
+                                    <div class="ml-3">
+                                        <h3 class="text-sm font-medium text-blue-900">Creating New RFQ</h3>
+                                        <p class="mt-1 text-xs text-blue-700">
+                                            After creating this RFQ, you'll be able to add items and select suppliers.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if object and 'status' in form.fields %}
+                            <div>
+                                <label for="id_status" class="block text-sm font-medium text-gray-700 mb-2">
+                                    Status
+                                </label>
+                                {{ form.status }}
+                                {% if form.status.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.status.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Help Card -->
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                        <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                            <h2 class="text-lg font-semibold text-gray-900">Need Help?</h2>
+                        </div>
+                        <div class="p-6 space-y-3">
+                            <a href="#" class="flex items-center text-sm text-navy-600 hover:text-navy-800">
+                                <i class="fas fa-book mr-2"></i> RFQ Guidelines
+                            </a>
+                            <a href="#" class="flex items-center text-sm text-navy-600 hover:text-navy-800">
+                                <i class="fas fa-file-alt mr-2"></i> Sample RFQ Template
+                            </a>
+                            <a href="#" class="flex items-center text-sm text-navy-600 hover:text-navy-800">
+                                <i class="fas fa-question-circle mr-2"></i> FAQs
+                            </a>
+                            <a href="#" class="flex items-center text-sm text-navy-600 hover:text-navy-800">
+                                <i class="fas fa-headset mr-2"></i> Contact Support
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Tips Card -->
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div class="flex">
+                            <i class="fas fa-lightbulb text-yellow-600 mt-0.5"></i>
+                            <div class="ml-3">
+                                <h3 class="text-sm font-medium text-yellow-900">Pro Tips</h3>
+                                <ul class="mt-2 text-xs text-yellow-700 space-y-1">
+                                    <li>• Be specific about your requirements</li>
+                                    <li>• Set realistic deadlines</li>
+                                    <li>• Include all relevant specifications</li>
+                                    <li>• Clear payment terms get better responses</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions - Sticky Bottom Bar -->
+            <div class="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 -mx-4 sm:-mx-6 lg:-mx-8">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <button type="button" onclick="saveDraft()" class="text-gray-700 hover:text-gray-900">
+                            <i class="fas fa-save mr-2"></i> Save as Draft
+                        </button>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <a href="{% url 'procurement:rfq_list' %}" 
+                           class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                            Cancel
+                        </a>
+                        <button type="submit" 
+                                class="px-6 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-navy-600 hover:bg-navy-700 transition-colors">
+                            {% if object %}
+                                <i class="fas fa-check mr-2"></i> Update RFQ
+                            {% else %}
+                                <i class="fas fa-arrow-right mr-2"></i> Continue to Items
+                            {% endif %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<!-- Flatpickr JS -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add form-input class to all form fields
+    const formFields = document.querySelectorAll('input[type="text"], input[type="date"], input[type="datetime-local"], textarea, select');
+    formFields.forEach(field => {
+        if (!field.classList.contains('form-input')) {
+            field.classList.add('form-input', 'w-full');
+        }
+    });
+    
+    // Initialize date pickers with Flatpickr
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // Deadline field (DateTime picker)
+    const deadlineField = document.getElementById('id_deadline');
+    if (deadlineField) {
+        // Add calendar icon
+        const wrapper = document.createElement('div');
+        wrapper.className = 'relative';
+        deadlineField.parentNode.insertBefore(wrapper, deadlineField);
+        wrapper.appendChild(deadlineField);
+        
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-calendar absolute right-3 top-3 text-gray-400 pointer-events-none';
+        wrapper.appendChild(icon);
+        
+        flatpickr(deadlineField, {
+            enableTime: true,
+            dateFormat: "Y-m-d H:i",
+            altInput: true,
+            altFormat: "F j, Y at h:i K",
+            minDate: tomorrow,
+            defaultHour: 17,
+            defaultMinute: 0,
+            time_24hr: false,
+            animate: true,
+            placeholder: "Select deadline date and time",
+            onChange: function(selectedDates, dateStr, instance) {
+                // Update delivery date min to be after deadline
+                if (deliveryPicker && selectedDates[0]) {
+                    const minDelivery = new Date(selectedDates[0]);
+                    minDelivery.setDate(minDelivery.getDate() + 1);
+                    deliveryPicker.set('minDate', minDelivery);
+                }
+            }
+        });
+    }
+    
+    // Required Delivery Date field (Date picker only)
+    const deliveryField = document.getElementById('id_required_delivery_date');
+    let deliveryPicker = null;
+    if (deliveryField) {
+        // Add calendar icon
+        const wrapper = document.createElement('div');
+        wrapper.className = 'relative';
+        deliveryField.parentNode.insertBefore(wrapper, deliveryField);
+        wrapper.appendChild(deliveryField);
+        
+        const icon = document.createElement('i');
+        icon.className = 'fas fa-calendar absolute right-3 top-3 text-gray-400 pointer-events-none';
+        wrapper.appendChild(icon);
+        
+        deliveryPicker = flatpickr(deliveryField, {
+            dateFormat: "Y-m-d",
+            altInput: true,
+            altFormat: "F j, Y",
+            minDate: tomorrow,
+            animate: true,
+            placeholder: "Select delivery date",
+            // Highlight weekends
+            onDayCreate: function(dObj, dStr, fp, dayElem) {
+                const date = dayElem.dateObj;
+                if (date.getDay() === 0 || date.getDay() === 6) {
+                    dayElem.style.backgroundColor = '#f3f4f6';
+                }
+            }
+        });
+    }
+    
+    // Add quick date selection buttons for deadline
+    if (deadlineField) {
+        const quickDates = document.createElement('div');
+        quickDates.className = 'flex gap-2 mt-2';
+        quickDates.innerHTML = `
+            <button type="button" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded" onclick="setQuickDate('deadline', 3)">
+                3 days
+            </button>
+            <button type="button" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded" onclick="setQuickDate('deadline', 7)">
+                1 week
+            </button>
+            <button type="button" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded" onclick="setQuickDate('deadline', 14)">
+                2 weeks
+            </button>
+            <button type="button" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded" onclick="setQuickDate('deadline', 30)">
+                1 month
+            </button>
+        `;
+        deadlineField.parentNode.appendChild(quickDates);
+    }
+    
+    // Add quick date selection buttons for delivery
+    if (deliveryField) {
+        const quickDates = document.createElement('div');
+        quickDates.className = 'flex gap-2 mt-2';
+        quickDates.innerHTML = `
+            <button type="button" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded" onclick="setQuickDate('delivery', 7)">
+                1 week
+            </button>
+            <button type="button" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded" onclick="setQuickDate('delivery', 14)">
+                2 weeks
+            </button>
+            <button type="button" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded" onclick="setQuickDate('delivery', 30)">
+                1 month
+            </button>
+            <button type="button" class="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded" onclick="setQuickDate('delivery', 60)">
+                2 months
+            </button>
+        `;
+        deliveryField.parentNode.appendChild(quickDates);
+    }
+});
+
+// Function to set quick dates
+function setQuickDate(field, days) {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    
+    if (field === 'deadline') {
+        const deadlineField = document.getElementById('id_deadline');
+        if (deadlineField && deadlineField._flatpickr) {
+            // Set to 5 PM on that date
+            date.setHours(17, 0, 0, 0);
+            deadlineField._flatpickr.setDate(date, true);
+        }
+    } else if (field === 'delivery') {
+        const deliveryField = document.getElementById('id_required_delivery_date');
+        if (deliveryField && deliveryField._flatpickr) {
+            deliveryField._flatpickr.setDate(date, true);
+        }
+    }
+}
+</script>
+{% endblock %}

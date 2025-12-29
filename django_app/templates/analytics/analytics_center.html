@@ -1,0 +1,1242 @@
+{% extends "base.html" %}
+{% load static %}
+{% load data_filters %}
+
+{% block title %}Analytics & Insights - AI Pricing Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Modern compact card styles with !important flags */
+    .analysis-card { 
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 0.75rem !important;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08) !important;
+        padding: 1.25rem !important;
+        margin-bottom: 1rem !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        backdrop-filter: blur(10px) !important;
+    }
+    
+    .analysis-card:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 25px rgba(15, 23, 42, 0.15) !important;
+        border-color: #1e3a8a !important;
+    }
+
+    /* Compact modern tab navigation with !important flags */
+    .tab-navigation {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+        border-radius: 0.5rem !important;
+        padding: 0.25rem !important;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 0.25rem !important;
+    }
+    
+    .tab-btn {
+        position: relative !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        border-radius: 0.375rem !important;
+        cursor: pointer !important;
+        padding: 0.5rem 1rem !important;
+        font-size: 0.875rem !important;
+        font-weight: 500 !important;
+        white-space: nowrap !important;
+        display: flex !important;
+        align-items: center !important;
+        background: transparent !important;
+        border: none !important;
+        min-height: 2.25rem !important;
+        color: #6b7280 !important;
+    }
+    
+    .tab-btn i {
+        margin-right: 0.375rem;
+        font-size: 0.75rem;
+    }
+    
+    .tab-btn.active {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%) !important;
+        color: white !important;
+        box-shadow: 0 2px 8px rgba(30, 58, 138, 0.3) !important;
+        transform: translateY(-1px) !important;
+    }
+    
+    .tab-btn:hover:not(.active) {
+        background: rgba(30, 58, 138, 0.05) !important;
+        color: #1e3a8a !important;
+        transform: translateY(-0.5px) !important;
+    }
+
+    /* Compact metric cards */
+    .metric-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 0.5rem !important;
+        padding: 1rem !important;
+        text-align: center !important;
+        position: relative !important;
+        overflow: hidden !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #1e3a8a, #3b82f6, #06b6d4);
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1) !important;
+    }
+
+    /* Enhanced insight items */
+    .insight-item {
+        padding: 0.875rem !important;
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+        border-left: 3px solid #0284c7 !important;
+        margin-bottom: 0.5rem !important;
+        border-radius: 0.375rem !important;
+        transition: all 0.3s ease !important;
+        position: relative !important;
+    }
+    
+    .insight-item::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(to bottom, #0284c7, #0ea5e9);
+        border-radius: 0 0.375rem 0.375rem 0;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .insight-item:hover::after {
+        opacity: 1;
+    }
+
+    /* Modern report cards */
+    .report-card {
+        padding: 1.25rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.5rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .report-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        z-index: 1;
+    }
+    
+    .report-card:hover::before {
+        opacity: 0.05;
+    }
+    
+    .report-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(30, 58, 138, 0.15);
+        border-color: #1e3a8a;
+    }
+    
+    .report-card > * {
+        position: relative;
+        z-index: 2;
+    }
+
+    /* Enhanced trend indicators */
+    .trend-indicator {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.025em;
+    }
+    
+    .trend-up { 
+        background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+        color: #15803d;
+        border: 1px solid #86efac;
+    }
+    
+    .trend-down { 
+        background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+        color: #dc2626;
+        border: 1px solid #fca5a5;
+    }
+    
+    .trend-neutral { 
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+        color: #6b7280;
+        border: 1px solid #d1d5db;
+    }
+
+    /* Page header enhancements */
+    .page-header {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+        border-radius: 0.75rem !important;
+        padding: 1.5rem !important;
+        margin-bottom: 1.5rem !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+
+    /* Compact performance metrics */
+    .performance-metric {
+        background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #e5e7eb;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .performance-metric::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: linear-gradient(90deg, #1e3a8a, #3b82f6);
+    }
+    
+    .performance-metric:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+    }
+
+    /* Anomaly cards */
+    .anomaly-card {
+        padding: 0.75rem;
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border: 1px solid #f59e0b;
+        border-radius: 0.5rem;
+        margin-bottom: 0.5rem;
+        position: relative;
+        transition: all 0.3s ease;
+    }
+    
+    .anomaly-card:hover {
+        transform: translateX(4px);
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+    }
+
+    /* What-if scenario styling */
+    .scenario-control {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 1px solid #e2e8f0;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+    
+    .scenario-result {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        border: 2px solid #0284c7;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        text-align: center;
+        position: relative;
+    }
+    
+    .scenario-result::before {
+        content: '💰';
+        position: absolute;
+        top: -8px;
+        left: 1rem;
+        background: white;
+        padding: 0 0.5rem;
+        font-size: 1.2rem;
+    }
+
+    /* Compact table styling */
+    .benchmark-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        border-radius: 0.5rem;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        background: white;
+    }
+    
+    .benchmark-table th {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        padding: 0.75rem;
+        font-weight: 600;
+        color: #1e3a8a;
+        border-bottom: 2px solid #e2e8f0;
+    }
+    
+    .benchmark-table td {
+        padding: 0.75rem;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .benchmark-table tbody tr:hover {
+        background: linear-gradient(135deg, #f8fafc 0%, rgba(248, 250, 252, 0.5) 100%);
+    }
+
+    /* Enhanced button styling */
+    .btn {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 0.375rem;
+        font-weight: 500;
+        padding: 0.5rem 1rem;
+        display: inline-flex;
+        align-items: center;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        color: white;
+        box-shadow: 0 2px 4px rgba(30, 58, 138, 0.2);
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(30, 58, 138, 0.3);
+    }
+    
+    .btn-outline {
+        background: transparent;
+        color: #1e3a8a;
+        border: 1px solid #1e3a8a;
+    }
+    
+    .btn-outline:hover {
+        background: #1e3a8a;
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .tab-navigation {
+            padding: 0.125rem;
+            gap: 0.125rem;
+        }
+        
+        .tab-btn {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+        }
+        
+        .analysis-card {
+            padding: 1rem;
+        }
+        
+        .page-header {
+            padding: 1rem;
+        }
+    }
+
+    /* Loading states */
+    .loading {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+    
+    .loading::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 20px;
+        height: 20px;
+        margin: -10px 0 0 -10px;
+        border: 2px solid #1e3a8a;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<script>
+// Define all functions globally to ensure they're accessible
+window.switchTab = function(button, tabName) {
+    // Update all tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active', 'text-navy-700');
+        btn.classList.add('text-gray-600');
+    });
+    
+    // Set active tab
+    button.classList.remove('text-gray-600');
+    button.classList.add('active', 'text-navy-700');
+    
+    // Hide all tab panes
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+        pane.style.display = 'none';
+    });
+    
+    // Show the selected tab pane if it exists
+    const targetPane = document.getElementById(tabName + '-tab');
+    if (targetPane) {
+        targetPane.style.display = 'block';
+    } else {
+        // If pane doesn't exist, load it via HTMX
+        if (typeof htmx !== 'undefined') {
+            htmx.ajax('GET', '/analytics/tab/' + tabName + '/', '#tab-content').then(() => {
+                // Apply card styles to newly loaded content
+                document.querySelectorAll('#tab-content .p-4.bg-white.border').forEach(el => {
+                    if (!el.classList.contains('card-style')) {
+                        el.classList.add('card-style');
+                    }
+                });
+            });
+        }
+    }
+}
+
+// Date Range Modal Functions - Defined globally
+window.openDateRangeModal = function() {
+    const modal = document.getElementById('dateRangeModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        
+        // Set default dates (last 30 days)
+        const today = new Date();
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        
+        document.getElementById('toDate').value = today.toISOString().split('T')[0];
+        document.getElementById('fromDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+    }
+}
+
+window.closeDateRangeModal = function() {
+    const modal = document.getElementById('dateRangeModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+window.generateReport = function(type) {
+    if (type) {
+        // Direct report generation from report cards
+        const reportTypeEl = document.getElementById('reportType');
+        if (reportTypeEl) {
+            reportTypeEl.value = type;
+        }
+    }
+    openReportModal();
+}
+
+window.openReportModal = function() {
+    const modal = document.getElementById('reportModal');
+    if (modal) {
+        modal.style.display = 'flex';
+    }
+}
+
+window.closeReportModal = function() {
+    const modal = document.getElementById('reportModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+</script>
+
+<!-- Date Range Modal -->
+<div id="dateRangeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" style="display: none;">
+    <div class="bg-white rounded-lg p-6 w-96 max-w-md">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Select Date Range</h3>
+            <button onclick="closeDateRangeModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+                <input type="date" id="fromDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+                <input type="date" id="toDate" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button onclick="applyQuickRange('7d')" class="flex-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">Last 7 Days</button>
+                <button onclick="applyQuickRange('30d')" class="flex-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">Last 30 Days</button>
+                <button onclick="applyQuickRange('90d')" class="flex-1 px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-md transition-colors">Last 90 Days</button>
+            </div>
+        </div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button onclick="closeDateRangeModal()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors">Cancel</button>
+            <button onclick="applyDateRange()" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                Apply Range
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Report Generation Modal -->
+<div id="reportModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" style="display: none;">
+    <div class="bg-white rounded-lg p-6 w-96 max-w-md">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Generate Report</h3>
+            <button onclick="closeReportModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Report Type</label>
+                <select id="reportType" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="executive">Executive Summary</option>
+                    <option value="spend_analysis">Spend Analysis</option>
+                    <option value="savings">Savings Opportunities</option>
+                    <option value="supplier">Supplier Performance</option>
+                    <option value="compliance">Contract Compliance</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Format</label>
+                <div class="flex gap-2">
+                    <label class="flex-1">
+                        <input type="radio" name="format" value="pdf" checked class="mr-2">
+                        <span class="text-sm">PDF</span>
+                    </label>
+                    <label class="flex-1">
+                        <input type="radio" name="format" value="excel" class="mr-2">
+                        <span class="text-sm">Excel</span>
+                    </label>
+                    <label class="flex-1">
+                        <input type="radio" name="format" value="csv" class="mr-2">
+                        <span class="text-sm">CSV</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Email to (optional)</label>
+                <input type="email" id="reportEmail" placeholder="email@example.com" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+        </div>
+        <div class="flex justify-end gap-2 mt-6">
+            <button onclick="closeReportModal()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors">Cancel</button>
+            <button onclick="generateReportWithOptions()" class="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
+                <i class="fas fa-download mr-1"></i> Generate
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Success Toast -->
+<div id="successToast" class="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg hidden z-50" style="display: none;">
+    <div class="flex items-center">
+        <i class="fas fa-check-circle mr-2"></i>
+        <span id="toastMessage">Action completed successfully!</span>
+    </div>
+</div>
+
+<div class="p-6">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-navy-900 mb-1">Analytics & Insights Center</h1>
+                <p class="text-gray-600 text-sm">Deep-dive analysis, reports, and predictive insights</p>
+            </div>
+            <div class="flex gap-2">
+                <button class="btn btn-outline text-sm" onclick="openDateRangeModal()">
+                    <i class="fas fa-calendar-alt mr-1"></i>Date Range
+                </button>
+                <button class="btn btn-primary text-sm" onclick="generateReport()">
+                    <i class="fas fa-file-export mr-1"></i>Generate
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compact Tab Navigation -->
+    <div class="mb-4">
+        <nav class="tab-navigation">
+            <button class="tab-btn active" 
+                    data-tab="insights"
+                    onclick="switchTab(this, 'insights')">
+                <i class="fas fa-lightbulb"></i>Insights
+            </button>
+            <button class="tab-btn" 
+                    data-tab="trends"
+                    onclick="switchTab(this, 'trends')">
+                <i class="fas fa-chart-line"></i>Trends
+            </button>
+            <button class="tab-btn" 
+                    data-tab="predictions"
+                    onclick="switchTab(this, 'predictions')">
+                <i class="fas fa-crystal-ball"></i>Predictions
+            </button>
+            <button class="tab-btn" 
+                    data-tab="benchmarks"
+                    onclick="switchTab(this, 'benchmarks')">
+                <i class="fas fa-balance-scale"></i>Benchmarks
+            </button>
+            <button class="tab-btn" 
+                    data-tab="reports"
+                    onclick="switchTab(this, 'reports')">
+                <i class="fas fa-file-alt"></i>Reports
+            </button>
+        </nav>
+    </div>
+
+    <!-- Tab Content -->
+    <div id="tab-content" class="tab-content">
+        <!-- Key Insights Tab -->
+        <div id="insights-tab" class="tab-pane active">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Cost Savings Opportunities -->
+                <div class="analysis-card">
+                    <h3 class="text-lg font-semibold text-navy-900 mb-4">
+                        <i class="fas fa-piggy-bank text-green-600 mr-2"></i>
+                        Cost Savings Opportunities
+                    </h3>
+                    <div class="space-y-3">
+                        {% for opp in opportunities %}
+                        <div class="insight-item">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ opp.material }}</p>
+                                    <p class="text-sm text-gray-600 mt-1">{{ opp.recommendation }}</p>
+                                    <p class="text-xs text-gray-500 mt-2">
+                                        Based on {{ opp.data_points }} data points
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-2xl font-bold text-green-600">
+                                        {{ opp.potential_saving_pct }}%
+                                    </span>
+                                    <p class="text-xs text-gray-500">potential savings</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <p class="text-gray-500">No immediate opportunities identified</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Price Anomalies -->
+                <div class="analysis-card">
+                    <h3 class="text-lg font-semibold text-navy-900 mb-3 flex items-center">
+                        <i class="fas fa-exclamation-triangle text-orange-600 mr-2"></i>
+                        Price Anomalies Detected
+                    </h3>
+                    <div class="space-y-2">
+                        {% for anomaly in anomalies %}
+                        <div class="anomaly-card">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="font-medium text-sm">{{ anomaly.material }}</p>
+                                    <p class="text-xs text-gray-600 mt-1">
+                                        {{ anomaly.supplier }} - {{ anomaly.deviation }}% above average
+                                    </p>
+                                </div>
+                                <button class="text-xs text-orange-700 hover:text-orange-800 font-medium px-2 py-1 bg-white bg-opacity-50 rounded">
+                                    Investigate
+                                </button>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="anomaly-card">
+                            <p class="text-gray-600 text-sm text-center">No anomalies detected</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Insights -->
+            <div class="analysis-card">
+                <h3 class="text-lg font-semibold text-navy-900 mb-3 flex items-center">
+                    <i class="fas fa-chart-pie text-blue-600 mr-2"></i>
+                    Performance Insights
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="metric-card">
+                        <p class="text-2xl font-bold text-navy-900 mb-1">{{ metrics.supplier_consolidation|default:"23" }}%</p>
+                        <p class="text-xs text-gray-600">Supplier Consolidation Opportunity</p>
+                    </div>
+                    <div class="metric-card">
+                        <p class="text-2xl font-bold text-navy-900 mb-1">{{ metrics.contract_compliance|default:"87" }}%</p>
+                        <p class="text-xs text-gray-600">Contract Compliance Rate</p>
+                    </div>
+                    <div class="metric-card">
+                        <p class="text-2xl font-bold text-navy-900 mb-1">{{ metrics.maverick_spend|default:"12" }}%</p>
+                        <p class="text-xs text-gray-600">Maverick Spend Identified</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trend Analysis Tab -->
+        <div id="trends-tab" class="tab-pane" style="display: none;">
+            <div class="analysis-card">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-navy-900">Historical Spend Analysis</h3>
+                    <select class="form-select" id="trend-period">
+                        <option value="30">Last 30 Days</option>
+                        <option value="60">Last 60 Days</option>
+                        <option value="90">Last 90 Days</option>
+                        <option value="180">Last 6 Months</option>
+                        <option value="365">Last Year</option>
+                    </select>
+                </div>
+                <div class="h-80">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                <!-- Category Trend -->
+                <div class="analysis-card">
+                    <h3 class="text-lg font-semibold text-navy-900 mb-4">Category Spend Trend</h3>
+                    <div class="h-64">
+                        <canvas id="categoryTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Supplier Trend -->
+                <div class="analysis-card">
+                    <h3 class="text-lg font-semibold text-navy-900 mb-4">Supplier Performance Trend</h3>
+                    <div class="h-64">
+                        <canvas id="supplierTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Predictions Tab -->
+        <div id="predictions-tab" class="tab-pane" style="display: none;">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Price Predictions -->
+                <div class="analysis-card">
+                    <h3 class="text-lg font-semibold text-navy-900 mb-4">
+                        <i class="fas fa-chart-line text-purple-600 mr-2"></i>
+                        Price Predictions (Next 30 Days)
+                    </h3>
+                    <div class="space-y-3">
+                        {% for pred in predictions %}
+                        <div class="flex justify-between items-center p-3 bg-purple-50 rounded">
+                            <div>
+                                <p class="font-medium">{{ pred.material }}</p>
+                                <p class="text-sm text-gray-600">Current: {{ pred.current_price|currency_format:"USD" }}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-lg font-bold">{{ pred.predicted_price|currency_format:"USD" }}</p>
+                                <span class="trend-indicator {% if pred.change > 0 %}trend-up{% elif pred.change < 0 %}trend-down{% else %}trend-neutral{% endif %}">
+                                    {{ pred.change|floatformat:1 }}%
+                                </span>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <p class="text-gray-500">Insufficient data for predictions</p>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Demand Forecast -->
+                <div class="analysis-card">
+                    <h3 class="text-lg font-semibold text-navy-900 mb-4">
+                        <i class="fas fa-box text-indigo-600 mr-2"></i>
+                        Demand Forecast
+                    </h3>
+                    <div class="h-64">
+                        <canvas id="demandForecastChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- What-If Scenarios -->
+            <div class="analysis-card">
+                <h3 class="text-lg font-semibold text-navy-900 mb-3 flex items-center">
+                    <i class="fas fa-sliders-h text-teal-600 mr-2"></i>
+                    What-If Scenario Analysis
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="scenario-control">
+                        <label class="block text-xs font-medium text-gray-700 mb-2">
+                            Price Increase:
+                        </label>
+                        <input type="range" min="0" max="50" value="10" class="w-full mb-1" id="priceIncrease">
+                        <span class="text-sm font-semibold text-navy-900" id="priceIncreaseValue">10%</span>
+                    </div>
+                    <div class="scenario-control">
+                        <label class="block text-xs font-medium text-gray-700 mb-2">
+                            Volume Change:
+                        </label>
+                        <input type="range" min="-50" max="50" value="0" class="w-full mb-1" id="volumeChange">
+                        <span class="text-sm font-semibold text-navy-900" id="volumeChangeValue">0%</span>
+                    </div>
+                </div>
+                <div class="mt-3 scenario-result">
+                    <p class="text-xs text-gray-600 mb-1">Projected Impact:</p>
+                    <p class="text-xl font-bold text-navy-900" id="projectedImpact">$0</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Benchmarking Tab -->
+        <div id="benchmarks-tab" class="tab-pane" style="display: none;">
+            <div class="analysis-card">
+                <h3 class="text-lg font-semibold text-navy-900 mb-3 flex items-center">
+                    <i class="fas fa-industry text-gray-600 mr-2"></i>
+                    Industry Benchmarking
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="benchmark-table w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Metric</th>
+                                <th class="text-center">Your Performance</th>
+                                <th class="text-center">Industry Avg</th>
+                                <th class="text-center">Best in Class</th>
+                                <th class="text-center">Gap</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bench in benchmarks %}
+                            <tr>
+                                <td class="text-sm">{{ bench.metric }}</td>
+                                <td class="text-center font-semibold text-sm">{{ bench.your_value }}</td>
+                                <td class="text-center text-sm">{{ bench.industry_avg }}</td>
+                                <td class="text-center text-green-600 font-medium text-sm">{{ bench.best_in_class }}</td>
+                                <td class="text-center">
+                                    <span class="trend-indicator {% if bench.gap > 0 %}trend-up{% else %}trend-down{% endif %}">
+                                        {{ bench.gap }}%
+                                    </span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-6 text-gray-500 text-sm">
+                                    📊 Benchmarking data will be available after more data collection
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reports Tab -->
+        <div id="reports-tab" class="tab-pane" style="display: none;">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Report Templates -->
+                <div class="report-card" onclick="generateReport('spend_analysis')">
+                    <i class="fas fa-chart-bar text-3xl text-blue-600 mb-3"></i>
+                    <h4 class="font-semibold">Spend Analysis Report</h4>
+                    <p class="text-sm text-gray-600 mt-2">Comprehensive spending breakdown by category, supplier, and time period</p>
+                </div>
+
+                <div class="report-card" onclick="generateReport('supplier_performance')">
+                    <i class="fas fa-users text-3xl text-green-600 mb-3"></i>
+                    <h4 class="font-semibold">Supplier Performance</h4>
+                    <p class="text-sm text-gray-600 mt-2">Detailed supplier metrics, compliance, and quality scores</p>
+                </div>
+
+                <div class="report-card" onclick="generateReport('savings_opportunities')">
+                    <i class="fas fa-piggy-bank text-3xl text-yellow-600 mb-3"></i>
+                    <h4 class="font-semibold">Savings Opportunities</h4>
+                    <p class="text-sm text-gray-600 mt-2">Identified cost reduction opportunities with action plans</p>
+                </div>
+
+                <div class="report-card" onclick="generateReport('price_trends')">
+                    <i class="fas fa-chart-line text-3xl text-purple-600 mb-3"></i>
+                    <h4 class="font-semibold">Price Trend Analysis</h4>
+                    <p class="text-sm text-gray-600 mt-2">Historical price movements and future predictions</p>
+                </div>
+
+                <div class="report-card" onclick="generateReport('contract_compliance')">
+                    <i class="fas fa-file-contract text-3xl text-red-600 mb-3"></i>
+                    <h4 class="font-semibold">Contract Compliance</h4>
+                    <p class="text-sm text-gray-600 mt-2">Contract adherence and maverick spend analysis</p>
+                </div>
+
+                <div class="report-card" onclick="generateReport('executive_summary')">
+                    <i class="fas fa-briefcase text-3xl text-navy-600 mb-3"></i>
+                    <h4 class="font-semibold">Executive Summary</h4>
+                    <p class="text-sm text-gray-600 mt-2">High-level overview for leadership presentation</p>
+                </div>
+            </div>
+
+            <!-- Recent Reports -->
+            <div class="analysis-card">
+                <h3 class="text-lg font-semibold text-navy-900 mb-3 flex items-center">
+                    <i class="fas fa-history text-gray-600 mr-2"></i>
+                    Recent Reports
+                </h3>
+                <div class="space-y-2">
+                    {% for report in recent_reports %}
+                    <div class="flex justify-between items-center p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200 hover:shadow-md transition-all duration-200">
+                        <div>
+                            <p class="font-medium text-sm">{{ report.name }}</p>
+                            <p class="text-xs text-gray-500">Generated {{ report.created_at|timesince }} ago</p>
+                        </div>
+                        <div class="flex gap-1">
+                            <button class="text-xs px-2 py-1 text-navy-700 hover:bg-navy-700 hover:text-white border border-navy-700 rounded transition-colors duration-200">View</button>
+                            <button class="text-xs px-2 py-1 text-gray-600 hover:bg-gray-600 hover:text-white border border-gray-600 rounded transition-colors duration-200">Download</button>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-file-alt text-2xl mb-2 opacity-50"></i>
+                        <p class="text-sm">No reports generated yet</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Listen for HTMX events to initialize charts and maintain styles
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'tab-content') {
+        // Apply card styles to newly loaded content
+        setTimeout(() => {
+            // Find all card-like elements and ensure they have proper styling
+            document.querySelectorAll('#tab-content .p-4.bg-white.border').forEach(el => {
+                el.classList.add('card-style');
+            });
+            
+            // Also apply to any element with these individual classes
+            document.querySelectorAll('#tab-content [class*="border-gray-200"]').forEach(el => {
+                if (el.classList.contains('p-4') && el.classList.contains('bg-white')) {
+                    el.classList.add('card-style');
+                }
+            });
+        }, 100);
+        
+        // Initialize charts if needed
+        const activeBtn = document.querySelector('.tab-btn.active');
+        if (activeBtn) {
+            const activeTab = activeBtn.dataset.tab;
+            if (typeof initializeTabContent === 'function') {
+                initializeTabContent(activeTab);
+            }
+        }
+    }
+});
+
+function initializeTabContent(tab) {
+    switch(tab) {
+        case 'trends':
+            initializeTrendCharts();
+            break;
+        case 'predictions':
+            initializePredictionCharts();
+            break;
+        case 'benchmarks':
+            initializeBenchmarkCharts();
+            break;
+        default:
+            break;
+    }
+}
+
+function initializeTrendCharts() {
+    const trendCanvas = document.getElementById('trendChart');
+    if (trendCanvas && !trendCanvas.chartInstance) {
+        trendCanvas.chartInstance = new Chart(trendCanvas, {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                datasets: [{
+                    label: 'Actual Spend',
+                    data: [45000, 52000, 48000, 61000, 58000, 62000],
+                    borderColor: '#003366',
+                    backgroundColor: 'rgba(0, 51, 102, 0.1)',
+                    tension: 0.3
+                }, {
+                    label: 'Budget',
+                    data: [50000, 50000, 50000, 55000, 55000, 60000],
+                    borderColor: '#dc2626',
+                    borderDash: [5, 5],
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' }
+                }
+            }
+        });
+    }
+    
+    // Initialize category trend chart
+    const categoryCanvas = document.getElementById('categoryTrendChart');
+    if (categoryCanvas && !categoryCanvas.chartInstance) {
+        categoryCanvas.chartInstance = new Chart(categoryCanvas, {
+            type: 'bar',
+            data: {
+                labels: ['Raw Materials', 'Components', 'Equipment', 'Services'],
+                datasets: [{
+                    label: 'Spend by Category',
+                    data: [25000, 32000, 18000, 15000],
+                    backgroundColor: ['#003366', '#0066cc', '#3399ff', '#66b3ff']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+    
+    // Initialize supplier trend chart
+    const supplierCanvas = document.getElementById('supplierTrendChart');
+    if (supplierCanvas && !supplierCanvas.chartInstance) {
+        supplierCanvas.chartInstance = new Chart(supplierCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: ['Top 5 Suppliers', 'Next 10 Suppliers', 'Others'],
+                datasets: [{
+                    data: [45, 35, 20],
+                    backgroundColor: ['#003366', '#0066cc', '#99ccff']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+}
+
+function initializePredictionCharts() {
+    const demandCanvas = document.getElementById('demandForecastChart');
+    if (demandCanvas && !demandCanvas.chartInstance) {
+        demandCanvas.chartInstance = new Chart(demandCanvas, {
+            type: 'line',
+            data: {
+                labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                datasets: [{
+                    label: 'Predicted Demand',
+                    data: [1200, 1350, 1280, 1450],
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    borderDash: [5, 5]
+                }, {
+                    label: 'Historical Average',
+                    data: [1100, 1250, 1200, 1300],
+                    borderColor: '#6b7280',
+                    fill: false
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+}
+
+function initializeBenchmarkCharts() {
+    // Benchmark charts can be initialized here if needed
+}
+
+// Initialize charts on page load for default tab
+if (document.getElementById('trendChart')) {
+    // Charts will be initialized when tabs are clicked or loaded via HTMX
+}
+
+// What-if scenario sliders
+document.getElementById('priceIncrease').addEventListener('input', function(e) {
+    document.getElementById('priceIncreaseValue').textContent = e.target.value + '%';
+    calculateScenarioImpact();
+});
+
+document.getElementById('volumeChange').addEventListener('input', function(e) {
+    document.getElementById('volumeChangeValue').textContent = e.target.value + '%';
+    calculateScenarioImpact();
+});
+
+function calculateScenarioImpact() {
+    const priceIncrease = document.getElementById('priceIncrease').value;
+    const volumeChange = document.getElementById('volumeChange').value;
+    const baseSpend = 62537; // From actual data
+    const impact = baseSpend * (1 + priceIncrease/100) * (1 + volumeChange/100) - baseSpend;
+    document.getElementById('projectedImpact').textContent = '$' + Math.round(impact).toLocaleString();
+}
+
+// Additional Date Range Functions
+window.applyQuickRange = function(range) {
+    const modal = document.getElementById('dateRangeModal');
+    const today = new Date();
+    const toDate = today.toISOString().split('T')[0];
+    let fromDate;
+    
+    switch(range) {
+        case '7d':
+            fromDate = new Date(today);
+            fromDate.setDate(today.getDate() - 7);
+            break;
+        case '30d':
+            fromDate = new Date(today);
+            fromDate.setDate(today.getDate() - 30);
+            break;
+        case '90d':
+            fromDate = new Date(today);
+            fromDate.setDate(today.getDate() - 90);
+            break;
+    }
+    
+    document.getElementById('fromDate').value = fromDate.toISOString().split('T')[0];
+    document.getElementById('toDate').value = toDate;
+}
+
+window.applyDateRange = function() {
+    const fromDate = document.getElementById('fromDate').value;
+    const toDate = document.getElementById('toDate').value;
+    
+    if (!fromDate || !toDate) {
+        alert('Please select both dates');
+        return;
+    }
+    
+    if (new Date(fromDate) > new Date(toDate)) {
+        alert('From date must be before To date');
+        return;
+    }
+    
+    // Apply the date range to analytics
+    console.log('Applying date range:', fromDate, 'to', toDate);
+    
+    // Update the page header to show selected range
+    const dateDisplay = document.createElement('span');
+    dateDisplay.className = 'text-sm text-gray-600 ml-2';
+    dateDisplay.textContent = `(${fromDate} to ${toDate})`;
+    
+    // Find and update the header
+    const header = document.querySelector('.page-header h1');
+    const existingRange = header.querySelector('span');
+    if (existingRange) {
+        existingRange.textContent = `(${fromDate} to ${toDate})`;
+    } else {
+        header.appendChild(dateDisplay);
+    }
+    
+    closeDateRangeModal();
+    showToast('Date range applied successfully');
+    
+    // Reload data with new date range (would make AJAX call in production)
+    // For now, just reinitialize charts
+    if (typeof initializeTrendCharts === 'function') {
+        initializeTrendCharts();
+    }
+}
+
+// Report Generation Functions
+window.generateReportWithOptions = function() {
+    const reportType = document.getElementById('reportType').value;
+    const format = document.querySelector('input[name="format"]:checked').value;
+    const email = document.getElementById('reportEmail').value;
+    
+    // Show loading state
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
+    btn.disabled = true;
+    
+    // Simulate report generation
+    setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        closeReportModal();
+        
+        // Show success message
+        let message = `${reportType.replace('_', ' ').charAt(0).toUpperCase() + reportType.replace('_', ' ').slice(1)} report generated in ${format.toUpperCase()} format`;
+        if (email) {
+            message += ` and sent to ${email}`;
+        }
+        showToast(message);
+        
+        // In production, this would trigger actual download
+        if (!email) {
+            // Trigger download
+            downloadReport(reportType, format);
+        }
+    }, 2000);
+}
+
+window.downloadReport = function(type, format) {
+    // Create a dummy download link
+    const link = document.createElement('a');
+    link.href = '#'; // In production, this would be the actual report URL
+    link.download = `${type}_report_${new Date().toISOString().split('T')[0]}.${format}`;
+    
+    // For demo, just log
+    console.log('Downloading report:', type, 'in format:', format);
+    
+    // In production, you would make an AJAX call to generate and download the report
+    // fetch(`/analytics/reports/generate/?type=${type}&format=${format}`)
+    //     .then(response => response.blob())
+    //     .then(blob => {
+    //         const url = window.URL.createObjectURL(blob);
+    //         link.href = url;
+    //         link.click();
+    //         window.URL.revokeObjectURL(url);
+    //     });
+}
+
+window.showToast = function(message) {
+    const toast = document.getElementById('successToast');
+    const messageEl = document.getElementById('toastMessage');
+    messageEl.textContent = message;
+    toast.style.display = 'block';
+    
+    setTimeout(() => {
+        toast.style.display = 'none';
+    }, 3000);
+}
+
+// Close modals when clicking outside
+window.onclick = function(event) {
+    if (event.target.id === 'dateRangeModal') {
+        closeDateRangeModal();
+    }
+    if (event.target.id === 'reportModal') {
+        closeReportModal();
+    }
+}
+</script>
+{% endblock %}

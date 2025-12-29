@@ -1,0 +1,37 @@
+# Simple Django Dockerfile that works
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    gcc \
+    python3-dev \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set work directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY requirements-simple.txt /app/
+RUN pip install --upgrade pip && \
+    pip install -r requirements-simple.txt
+
+# Copy project
+COPY django_app /app/django_app
+
+# Create necessary directories
+RUN mkdir -p /app/static /app/media /app/logs
+
+# Expose port
+EXPOSE 8000
+
+# Set the working directory to django_app
+WORKDIR /app/django_app
+
+# Run the application
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

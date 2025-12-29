@@ -1,0 +1,11 @@
+<!-- Progress Bar Partial Template -->
+<div class="w-full">
+    <div class="flex justify-between text-sm text-gray-600 mb-1">
+        <span>{{ current }} / {{ total }}</span>
+        <span>{{ percentage }}%</span>
+    </div>
+    <div class="w-full bg-gray-200 rounded-full h-2">
+        <div class="bg-{{ color }}-600 h-2 rounded-full transition-all duration-300" 
+             style="width: {{ percentage }}%"></div>
+    </div>
+</div>

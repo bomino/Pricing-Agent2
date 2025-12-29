@@ -1,0 +1,167 @@
+[tool.poetry]
+name = "pricing-agent"
+version = "0.1.0"
+description = "AI Pricing Agent for Manufacturing & Construction Procurement"
+authors = ["VSTX Team"]
+readme = "README.md"
+packages = [
+    { include = "django_app" },
+    { include = "fastapi_ml" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+# Django and extensions
+django = "^5.0"
+django-environ = "^0.11.2"
+django-extensions = "^3.2.3"
+django-htmx = "^1.17.2"
+django-compressor = "^4.4"
+django-redis = "^5.4.0"
+django-celery-beat = "^2.5.0"
+django-cors-headers = "^4.3.1"
+whitenoise = "^6.6.0"
+
+# FastAPI and async
+fastapi = "^0.110.0"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+python-multipart = "^0.0.6"
+httpx = "^0.26.0"
+websockets = "^12.0"
+
+# Database
+psycopg2-binary = "^2.9.9"
+redis = "^5.0.1"
+celery = {extras = ["redis"], version = "^5.3.4"}
+sqlalchemy = "^2.0.25"
+alembic = "^1.13.1"
+
+# ML and Data Science
+pandas = "^2.1.4"
+numpy = "^1.26.3"
+scikit-learn = "^1.4.0"
+lightgbm = "^4.3.0"
+prophet = "^1.1.5"
+joblib = "^1.3.2"
+mlflow = "^2.10.0"
+
+# API and validation
+pydantic = "^2.5.3"
+pydantic-settings = "^2.1.0"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+email-validator = "^2.1.0"
+
+# Utilities
+python-dotenv = "^1.0.0"
+pendulum = "^3.0.0"
+loguru = "^0.7.2"
+orjson = "^3.9.10"
+
+# Development tools
+gunicorn = "^21.2.0"
+
+[tool.poetry.group.dev.dependencies]
+# Testing
+pytest = "^7.4.4"
+pytest-django = "^4.7.0"
+pytest-asyncio = "^0.23.3"
+pytest-cov = "^4.1.0"
+factory-boy = "^3.3.0"
+faker = "^22.2.0"
+
+# Code quality
+black = "^24.1.1"
+ruff = "^0.1.14"
+mypy = "^1.8.0"
+pre-commit = "^3.6.0"
+
+# Django development
+django-debug-toolbar = "^4.2.0"
+ipython = "^8.20.0"
+
+# Documentation
+mkdocs = "^1.5.3"
+mkdocs-material = "^9.5.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+[tool.ruff]
+line-length = 100
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long
+    "B008",  # do not perform function calls in argument defaults
+    "W191",  # indentation contains tabs
+]
+exclude = [
+    "migrations",
+    "venv",
+    ".venv",
+    "build",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "pricing_agent.settings.test"
+python_files = ["test_*.py", "*_test.py", "tests.py"]
+addopts = "-ra -q --strict-markers --ignore=migrations"
+testpaths = ["django_app/tests", "fastapi_ml/tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = ["migrations/", "venv/", ".venv/"]
+
+[tool.coverage.run]
+source = ["django_app", "fastapi_ml"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "*/admin.py",
+    "*/apps.py",
+    "manage.py",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+
+[tool.djlint]
+profile = "django"
+indent = 2
+max_line_length = 120

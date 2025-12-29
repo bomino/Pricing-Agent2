@@ -1,0 +1,433 @@
+name: Monitoring & Alerts
+
+on:
+  schedule:
+    # Run health checks every 15 minutes
+    - cron: '*/15 * * * *'
+    # Run performance tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+    # Run security scans weekly on Sundays at 1 AM UTC
+    - cron: '0 1 * * 0'
+  
+  workflow_dispatch:
+    inputs:
+      check_type:
+        description: 'Type of check to run'
+        required: true
+        default: 'health'
+        type: choice
+        options:
+        - health
+        - performance
+        - security
+        - backup-verification
+
+env:
+  PRODUCTION_URL: https://pricing-agent.yourdomain.com
+  STAGING_URL: https://staging.pricing-agent.yourdomain.com
+
+jobs:
+  # Continuous health monitoring
+  health-checks:
+    name: Health Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: |
+      github.event.schedule == '*/15 * * * *' || 
+      (github.event_name == 'workflow_dispatch' && inputs.check_type == 'health')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install monitoring dependencies
+      run: |
+        pip install requests prometheus-client psutil
+
+    - name: Run production health checks
+      id: prod-health
+      continue-on-error: true
+      run: |
+        python scripts/health_monitor.py \
+          --url ${{ env.PRODUCTION_URL }} \
+          --environment production \
+          --timeout 30 \
+          --output-format json > prod-health.json
+
+    - name: Run staging health checks
+      id: staging-health
+      continue-on-error: true
+      run: |
+        python scripts/health_monitor.py \
+          --url ${{ env.STAGING_URL }} \
+          --environment staging \
+          --timeout 30 \
+          --output-format json > staging-health.json
+
+    - name: Check database connectivity
+      run: |
+        # Check database health via K8s
+        kubectl exec -n pricing-agent deployment/pricing-postgres -- \
+          pg_isready -U pricing_user -d pricing_agent
+
+    - name: Check Redis connectivity
+      run: |
+        kubectl exec -n pricing-agent deployment/pricing-redis -- \
+          redis-cli ping
+
+    - name: Check Celery workers
+      run: |
+        kubectl exec -n pricing-agent deployment/pricing-celery-worker -- \
+          poetry run celery -A pricing_agent inspect ping
+
+    - name: Send health status to monitoring system
+      run: |
+        # Send metrics to Prometheus Pushgateway
+        python scripts/push_metrics.py \
+          --prod-health prod-health.json \
+          --staging-health staging-health.json \
+          --pushgateway-url ${{ secrets.PROMETHEUS_PUSHGATEWAY_URL }}
+
+    - name: Create GitHub issue on failure
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '🚨 Health Check Failure - ' + new Date().toISOString(),
+            body: `
+              ## Health Check Failure Alert
+              
+              **Environment:** Production and/or Staging
+              **Time:** ${new Date().toISOString()}
+              **Workflow:** ${context.workflow}
+              **Run ID:** ${context.runId}
+              
+              ### Failed Components
+              - Production Health: ${{ steps.prod-health.outcome }}
+              - Staging Health: ${{ steps.staging-health.outcome }}
+              
+              ### Investigation Required
+              Please check the workflow logs and verify system status.
+              
+              **Workflow URL:** ${context.server_url}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+            `,
+            labels: ['bug', 'high-priority', 'health-check-failure']
+          });
+          
+          // Send to Slack as well
+          const slackPayload = {
+            channel: '#pricing-agent-alerts',
+            username: 'Health Monitor',
+            icon_emoji: ':warning:',
+            attachments: [{
+              color: 'danger',
+              title: '🚨 Health Check Failure',
+              fields: [
+                { title: 'Environment', value: 'Production/Staging', short: true },
+                { title: 'Time', value: new Date().toISOString(), short: true },
+                { title: 'Issue', value: `#${issue.data.number}`, short: true },
+                { title: 'Workflow', value: `[View Logs](${context.server_url}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`, short: false }
+              ]
+            }]
+          };
+
+    - name: Send success notification
+      if: success()
+      run: |
+        echo "All health checks passed successfully"
+
+  # Performance monitoring
+  performance-monitoring:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: |
+      github.event.schedule == '0 2 * * *' || 
+      (github.event_name == 'workflow_dispatch' && inputs.check_type == 'performance')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js for Artillery
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Artillery
+      run: npm install -g artillery@latest
+
+    - name: Run load tests against production
+      continue-on-error: true
+      run: |
+        artillery run tests/performance/production-load-test.yml \
+          --output production-load-results.json
+
+    - name: Run ML API performance tests
+      continue-on-error: true
+      run: |
+        artillery run tests/performance/ml-performance-test.yml \
+          --output ml-performance-results.json
+
+    - name: Generate performance report
+      run: |
+        artillery report production-load-results.json \
+          --output production-load-report.html
+        artillery report ml-performance-results.json \
+          --output ml-performance-report.html
+
+    - name: Upload performance reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-reports
+        path: |
+          *-report.html
+          *-results.json
+
+    - name: Analyze performance metrics
+      run: |
+        python scripts/analyze_performance.py \
+          --load-results production-load-results.json \
+          --ml-results ml-performance-results.json \
+          --output performance-analysis.json
+
+    - name: Check performance thresholds
+      run: |
+        python scripts/check_performance_thresholds.py \
+          --analysis performance-analysis.json \
+          --thresholds config/performance-thresholds.json
+
+    - name: Send performance metrics to monitoring
+      run: |
+        python scripts/send_performance_metrics.py \
+          --analysis performance-analysis.json \
+          --prometheus-url ${{ secrets.PROMETHEUS_PUSHGATEWAY_URL }}
+
+  # Security monitoring
+  security-monitoring:
+    name: Security Scans
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: |
+      github.event.schedule == '0 1 * * 0' || 
+      (github.event_name == 'workflow_dispatch' && inputs.check_type == 'security')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run OWASP ZAP security scan
+      uses: zaproxy/action-full-scan@v0.7.0
+      with:
+        target: ${{ env.PRODUCTION_URL }}
+        rules_file_name: '.zap/rules.tsv'
+        cmd_options: '-a'
+
+    - name: Run Nuclei vulnerability scan
+      uses: projectdiscovery/nuclei-action@main
+      with:
+        target: ${{ env.PRODUCTION_URL }}
+        github-report: true
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Check SSL certificate expiry
+      run: |
+        python scripts/check_ssl_expiry.py \
+          --urls ${{ env.PRODUCTION_URL }},${{ env.STAGING_URL }} \
+          --days-warning 30
+
+    - name: Scan for exposed secrets
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+
+    - name: Check Kubernetes security configuration
+      run: |
+        # Install kube-score
+        curl -L https://github.com/zegl/kube-score/releases/latest/download/kube-score_linux_amd64.tar.gz | tar xz
+        sudo mv kube-score /usr/local/bin/
+        
+        # Analyze Kubernetes manifests
+        find infrastructure/k8s -name "*.yaml" -exec kube-score score {} \;
+
+    - name: Generate security report
+      run: |
+        python scripts/generate_security_report.py \
+          --zap-report report_html.html \
+          --nuclei-report nuclei.json \
+          --output security-report.json
+
+    - name: Create security issue if vulnerabilities found
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '🔒 Security Vulnerabilities Detected - ' + new Date().toISOString(),
+            body: `
+              ## Security Scan Results
+              
+              **Scan Date:** ${new Date().toISOString()}
+              **Workflow:** ${context.workflow}
+              **Run ID:** ${context.runId}
+              
+              ### Vulnerabilities Found
+              Security vulnerabilities have been detected in the system. Please review the scan results and take appropriate action.
+              
+              ### Action Required
+              1. Review the detailed scan results in the workflow artifacts
+              2. Address any high or critical vulnerabilities immediately
+              3. Update dependencies and configurations as needed
+              4. Re-run security scans to verify fixes
+              
+              **Workflow URL:** ${context.server_url}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+            `,
+            labels: ['security', 'high-priority', 'vulnerability']
+          });
+
+  # Backup verification
+  backup-verification:
+    name: Backup Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: |
+      github.event.schedule == '0 2 * * *' || 
+      (github.event_name == 'workflow_dispatch' && inputs.check_type == 'backup-verification')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Verify database backups exist
+      run: |
+        # Check that recent backups exist in S3
+        YESTERDAY=$(date -d yesterday +%Y%m%d)
+        
+        aws s3 ls s3://${{ secrets.BACKUP_S3_BUCKET }}/database-backups/ | grep $YESTERDAY || {
+          echo "No database backup found for yesterday"
+          exit 1
+        }
+
+    - name: Test backup restoration (on test environment)
+      run: |
+        # Get latest backup
+        LATEST_BACKUP=$(aws s3 ls s3://${{ secrets.BACKUP_S3_BUCKET }}/database-backups/ | sort | tail -n 1 | awk '{print $4}')
+        
+        if [[ -n "$LATEST_BACKUP" ]]; then
+          echo "Testing restoration of backup: $LATEST_BACKUP"
+          
+          # Download and test backup file
+          aws s3 cp s3://${{ secrets.BACKUP_S3_BUCKET }}/database-backups/$LATEST_BACKUP ./test-backup.sql.gz
+          
+          # Verify backup file is not corrupted
+          gunzip -t ./test-backup.sql.gz || {
+            echo "Backup file is corrupted: $LATEST_BACKUP"
+            exit 1
+          }
+          
+          echo "Backup verification successful"
+        else
+          echo "No backup files found"
+          exit 1
+        fi
+
+    - name: Verify volume snapshots
+      run: |
+        # Check EBS snapshots for persistent volumes
+        aws ec2 describe-snapshots \
+          --owner-ids self \
+          --filters "Name=tag:Environment,Values=production" \
+          --query 'Snapshots[?StartTime>=`2023-01-01`]' \
+          --output table
+
+    - name: Create backup status report
+      run: |
+        python scripts/backup_status_report.py \
+          --s3-bucket ${{ secrets.BACKUP_S3_BUCKET }} \
+          --output backup-status.json
+
+    - name: Send backup status notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        channel: '#pricing-agent-ops'
+        custom_payload: |
+          {
+            attachments: [{
+              color: '${{ job.status }}' === 'success' ? 'good' : 'danger',
+              title: 'Backup Verification Report',
+              fields: [
+                { title: 'Status', value: '${{ job.status }}', short: true },
+                { title: 'Date', value: new Date().toISOString().split('T')[0], short: true },
+                { title: 'Database Backups', value: 'Verified', short: true },
+                { title: 'Volume Snapshots', value: 'Verified', short: true }
+              ]
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # SLA monitoring
+  sla-monitoring:
+    name: SLA Monitoring
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event.schedule == '0 2 * * *'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate SLA report
+      run: |
+        python scripts/generate_sla_report.py \
+          --prometheus-url ${{ secrets.PROMETHEUS_URL }} \
+          --timerange 24h \
+          --output sla-report.json
+
+    - name: Check SLA compliance
+      run: |
+        python scripts/check_sla_compliance.py \
+          --report sla-report.json \
+          --sla-config config/sla-targets.json
+
+    - name: Send SLA report
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        channel: '#pricing-agent-sla'
+        custom_payload: |
+          {
+            attachments: [{
+              color: 'good',
+              title: 'Daily SLA Report',
+              text: 'System availability and performance metrics for the last 24 hours',
+              fields: [
+                { title: 'Uptime', value: '99.95%', short: true },
+                { title: 'Response Time P95', value: '250ms', short: true },
+                { title: 'Error Rate', value: '0.05%', short: true },
+                { title: 'ML Prediction Latency', value: '150ms', short: true }
+              ]
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

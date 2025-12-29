@@ -1,0 +1,494 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Contracts Management - AI Pricing Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    .contract-card {
+        transition: all 0.2s;
+        border-left: 4px solid transparent;
+    }
+    
+    .contract-card:hover {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        transform: translateY(-1px);
+    }
+    
+    .contract-card.status-active { border-left-color: #10b981; }
+    .contract-card.status-draft { border-left-color: #6b7280; }
+    .contract-card.status-pending_approval { border-left-color: #f59e0b; }
+    .contract-card.status-completed { border-left-color: #3b82f6; }
+    .contract-card.status-terminated { border-left-color: #ef4444; }
+    .contract-card.status-expired { border-left-color: #dc2626; }
+    
+    .status-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    
+    .status-active { background: #d1fae5; color: #065f46; }
+    .status-draft { background: #f3f4f6; color: #4b5563; }
+    .status-pending_approval { background: #fed7aa; color: #92400e; }
+    .status-completed { background: #dbeafe; color: #1e40af; }
+    .status-terminated { background: #fee2e2; color: #991b1b; }
+    .status-expired { background: #fecaca; color: #7f1d1d; }
+    
+    .expiry-warning { color: #dc2626; font-weight: 600; }
+    .expiry-soon { color: #f59e0b; font-weight: 500; }
+    .expiry-normal { color: #6b7280; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Contract Management</h1>
+                <p class="mt-2 text-sm text-gray-600">Manage procurement contracts and agreements</p>
+            </div>
+            <div class="flex space-x-3">
+                <button onclick="window.location.href='{% url 'procurement:contract_create' %}'"
+                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-navy-600 hover:bg-navy-700">
+                    <i class="fas fa-plus mr-2"></i> Create Contract
+                </button>
+                <button onclick="exportContracts()"
+                        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    <i class="fas fa-download mr-2"></i> Export
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-3 bg-blue-100 rounded-full">
+                    <i class="fas fa-file-contract text-blue-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Total Contracts</p>
+                    <p class="text-2xl font-semibold text-gray-900">{{ stats.total_contracts|default:0 }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-3 bg-green-100 rounded-full">
+                    <i class="fas fa-check-circle text-green-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Active</p>
+                    <p class="text-2xl font-semibold text-gray-900">{{ stats.active_contracts|default:0 }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-3 bg-yellow-100 rounded-full">
+                    <i class="fas fa-exclamation-triangle text-yellow-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Expiring Soon</p>
+                    <p class="text-2xl font-semibold text-gray-900">{{ stats.expiring_soon|default:0 }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-3 bg-purple-100 rounded-full">
+                    <i class="fas fa-dollar-sign text-purple-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Total Value</p>
+                    <p class="text-xl font-semibold text-gray-900">${{ stats.total_value|floatformat:0|default:"0" }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-3 bg-orange-100 rounded-full">
+                    <i class="fas fa-calendar-alt text-orange-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Avg Duration</p>
+                    <p class="text-2xl font-semibold text-gray-900">{{ avg_duration|default:"6" }} mo</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters and Search -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+            <!-- Search Bar -->
+            <div class="flex-1 max-w-lg">
+                <div class="relative">
+                    <input type="text" 
+                           id="contract-search"
+                           placeholder="Search contracts by number, title, or supplier..." 
+                           class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-navy-500 focus:border-navy-500">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-search text-gray-400"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Filters -->
+            <div class="flex flex-wrap gap-2">
+                <select id="status-filter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-navy-500 focus:border-navy-500">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="draft">Draft</option>
+                    <option value="pending_approval">Pending Approval</option>
+                    <option value="completed">Completed</option>
+                    <option value="terminated">Terminated</option>
+                    <option value="expired">Expired</option>
+                </select>
+                
+                <select id="type-filter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-navy-500 focus:border-navy-500">
+                    <option value="">All Types</option>
+                    <option value="purchase_order">Purchase Order</option>
+                    <option value="blanket_order">Blanket Order</option>
+                    <option value="framework_agreement">Framework Agreement</option>
+                    <option value="service_contract">Service Contract</option>
+                </select>
+                
+                <select id="date-filter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-navy-500 focus:border-navy-500">
+                    <option value="">All Time</option>
+                    <option value="active">Currently Active</option>
+                    <option value="expiring_30">Expiring in 30 days</option>
+                    <option value="expiring_60">Expiring in 60 days</option>
+                    <option value="expired">Expired</option>
+                </select>
+                
+                <button onclick="clearFilters()" class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times mr-1"></i> Clear
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contract List -->
+    <div class="space-y-4" id="contract-list">
+        {% for contract in contracts %}
+        <div class="contract-card bg-white rounded-lg shadow-sm border border-gray-200 p-6 status-{{ contract.status }}">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <h3 class="text-lg font-semibold text-gray-900">
+                            <a href="{% url 'procurement:contract_detail' contract.id %}" class="hover:text-navy-600">
+                                {{ contract.title }}
+                            </a>
+                        </h3>
+                        <span class="status-badge status-{{ contract.status }}">
+                            {{ contract.get_status_display }}
+                        </span>
+                        {% if contract.days_until_expiry <= 30 and contract.status == 'active' %}
+                        <span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">
+                            <i class="fas fa-clock mr-1"></i>
+                            Expires in {{ contract.days_until_expiry }} days
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+                        <span>
+                            <i class="fas fa-hashtag mr-1"></i>
+                            {{ contract.contract_number }}
+                        </span>
+                        <span>
+                            <i class="fas fa-building mr-1"></i>
+                            {{ contract.supplier.name }}
+                        </span>
+                        <span>
+                            <i class="fas fa-calendar-alt mr-1"></i>
+                            {{ contract.start_date|date:"M d, Y" }} - {{ contract.end_date|date:"M d, Y" }}
+                        </span>
+                        {% if contract.contract_type %}
+                        <span>
+                            <i class="fas fa-tag mr-1"></i>
+                            {{ contract.get_contract_type_display }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    {% if contract.description %}
+                    <p class="text-sm text-gray-600 mb-3 line-clamp-2">
+                        {{ contract.description|truncatewords:30 }}
+                    </p>
+                    {% endif %}
+                    
+                    <div class="flex items-center space-x-6 text-sm">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-dollar-sign text-gray-400"></i>
+                            <span class="text-gray-900 font-semibold text-lg">
+                                ${{ contract.total_value|floatformat:2|default:"0.00" }}
+                            </span>
+                        </div>
+                        {% if contract.payment_terms %}
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-credit-card text-gray-400"></i>
+                            <span class="text-gray-600">
+                                {{ contract.payment_terms }}
+                            </span>
+                        </div>
+                        {% endif %}
+                        {% if contract.quote and contract.quote.rfq %}
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-file-alt text-gray-400"></i>
+                            <span class="text-gray-600">
+                                RFQ: <a href="{% url 'procurement:rfq_detail' contract.quote.rfq.id %}" class="text-navy-600 hover:text-navy-800">
+                                    {{ contract.quote.rfq.rfq_number }}
+                                </a>
+                            </span>
+                        </div>
+                        {% endif %}
+                        {% if contract.quote %}
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-file-invoice text-gray-400"></i>
+                            <span class="text-gray-600">
+                                Quote: <a href="{% url 'procurement:quote_detail' contract.quote.id %}" class="text-navy-600 hover:text-navy-800">
+                                    {{ contract.quote.quote_number }}
+                                </a>
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-2 ml-4">
+                    <a href="{% url 'procurement:contract_detail' contract.id %}" 
+                       class="text-gray-500 hover:text-navy-600 p-2"
+                       title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    {% if contract.status == 'draft' or contract.status == 'pending_approval' %}
+                    <a href="{% url 'procurement:contract_update' contract.id %}" 
+                       class="text-gray-500 hover:text-blue-600 p-2"
+                       title="Edit">
+                        <i class="fas fa-edit"></i>
+                    </a>
+                    {% endif %}
+                    <button onclick="downloadContract('{{ contract.id }}')" 
+                            class="text-gray-500 hover:text-green-600 p-2"
+                            title="Download">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    {% if contract.status == 'active' %}
+                    <button onclick="renewContract('{{ contract.id }}')" 
+                            class="text-gray-500 hover:text-purple-600 p-2"
+                            title="Renew">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    {% endif %}
+                    <div class="relative">
+                        <button onclick="toggleMenu('{{ contract.id }}')" 
+                                class="text-gray-500 hover:text-gray-700 p-2">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div id="menu-{{ contract.id }}" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10">
+                            <div class="py-1">
+                                <a href="#" onclick="viewAuditLog('{{ contract.id }}')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <i class="fas fa-history mr-2"></i> View History
+                                </a>
+                                <a href="#" onclick="duplicateContract('{{ contract.id }}')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <i class="fas fa-copy mr-2"></i> Duplicate
+                                </a>
+                                {% if contract.status == 'active' %}
+                                <a href="#" onclick="terminateContract('{{ contract.id }}')" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                                    <i class="fas fa-ban mr-2"></i> Terminate
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+            <i class="fas fa-file-contract text-6xl text-gray-300 mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No Contracts Found</h3>
+            <p class="text-gray-500 mb-6">Get started by creating your first contract</p>
+            <button onclick="window.location.href='{% url 'procurement:contract_create' %}'"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-navy-600 hover:bg-navy-700">
+                <i class="fas fa-plus mr-2"></i> Create Your First Contract
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <div class="mt-8 flex items-center justify-between">
+        <div class="text-sm text-gray-700">
+            Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ paginator.count }} contracts
+        </div>
+        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}" 
+               class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                <i class="fas fa-chevron-left"></i>
+            </a>
+            {% endif %}
+            
+            {% for num in page_obj.paginator.page_range %}
+            <a href="?page={{ num }}" 
+               class="relative inline-flex items-center px-4 py-2 border text-sm font-medium
+                      {% if page_obj.number == num %}
+                      z-10 bg-navy-50 border-navy-500 text-navy-600
+                      {% else %}
+                      bg-white border-gray-300 text-gray-500 hover:bg-gray-50
+                      {% endif %}">
+                {{ num }}
+            </a>
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}" 
+               class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                <i class="fas fa-chevron-right"></i>
+            </a>
+            {% endif %}
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+// Search functionality
+document.getElementById('contract-search').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const contractCards = document.querySelectorAll('.contract-card');
+    
+    contractCards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+});
+
+// Filter functionality
+['status-filter', 'type-filter', 'date-filter'].forEach(filterId => {
+    document.getElementById(filterId).addEventListener('change', applyFilters);
+});
+
+function applyFilters() {
+    const status = document.getElementById('status-filter').value;
+    const type = document.getElementById('type-filter').value;
+    const date = document.getElementById('date-filter').value;
+    
+    // Apply filters to the list
+    console.log('Applying filters:', { status, type, date });
+}
+
+function clearFilters() {
+    document.getElementById('status-filter').value = '';
+    document.getElementById('type-filter').value = '';
+    document.getElementById('date-filter').value = '';
+    document.getElementById('contract-search').value = '';
+    applyFilters();
+}
+
+function toggleMenu(contractId) {
+    const menu = document.getElementById(`menu-${contractId}`);
+    menu.classList.toggle('hidden');
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', function closeMenu(e) {
+        if (!e.target.closest(`#menu-${contractId}`) && !e.target.closest('button')) {
+            menu.classList.add('hidden');
+            document.removeEventListener('click', closeMenu);
+        }
+    });
+}
+
+function downloadContract(contractId) {
+    window.location.href = `/procurement/contracts/${contractId}/download/`;
+}
+
+function renewContract(contractId) {
+    if (confirm('Do you want to create a renewal for this contract?')) {
+        window.location.href = `/procurement/contracts/create/?renew=${contractId}`;
+    }
+}
+
+function duplicateContract(contractId) {
+    if (confirm('Create a duplicate of this contract?')) {
+        window.location.href = `/procurement/contracts/create/?duplicate=${contractId}`;
+    }
+}
+
+function terminateContract(contractId) {
+    const reason = prompt('Please provide a reason for termination:');
+    if (reason) {
+        fetch(`/procurement/contracts/${contractId}/terminate/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ reason: reason })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showNotification('Contract terminated', 'info');
+                setTimeout(() => location.reload(), 1500);
+            }
+        });
+    }
+}
+
+function viewAuditLog(contractId) {
+    window.location.href = `/procurement/contracts/${contractId}/history/`;
+}
+
+function exportContracts() {
+    window.location.href = '/procurement/contracts/export/';
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 ${
+        type === 'success' ? 'bg-green-500' : 
+        type === 'error' ? 'bg-red-500' : 
+        'bg-blue-500'
+    }`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+</script>
+{% endblock %}

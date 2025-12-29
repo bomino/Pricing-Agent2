@@ -1,0 +1,1 @@
+# Core app for base functionality and shared components

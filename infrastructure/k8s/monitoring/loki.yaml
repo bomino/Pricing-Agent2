@@ -1,0 +1,542 @@
+# Loki for log aggregation
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+  namespace: pricing-agent-monitoring
+  labels:
+    app: loki
+    component: logging
+data:
+  loki.yaml: |
+    auth_enabled: false
+
+    server:
+      http_listen_port: 3100
+      grpc_listen_port: 9096
+
+    common:
+      path_prefix: /loki
+      storage:
+        filesystem:
+          chunks_directory: /loki/chunks
+          rules_directory: /loki/rules
+      replication_factor: 1
+      ring:
+        instance_addr: 127.0.0.1
+        kvstore:
+          store: inmemory
+
+    query_range:
+      results_cache:
+        cache:
+          embedded_cache:
+            enabled: true
+            max_size_mb: 100
+
+    schema_config:
+      configs:
+        - from: 2020-10-24
+          store: boltdb-shipper
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+
+    storage_config:
+      boltdb_shipper:
+        active_index_directory: /loki/boltdb-shipper-active
+        cache_location: /loki/boltdb-shipper-cache
+        cache_ttl: 24h
+        shared_store: filesystem
+      filesystem:
+        directory: /loki/chunks
+
+    compactor:
+      working_directory: /loki/boltdb-shipper-compactor
+      shared_store: filesystem
+
+    limits_config:
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      ingestion_rate_mb: 16
+      ingestion_burst_size_mb: 32
+      max_streams_per_user: 10000
+      max_line_size: 1MB
+
+    chunk_store_config:
+      max_look_back_period: 0s
+
+    table_manager:
+      retention_deletes_enabled: true
+      retention_period: 744h  # 31 days
+
+    ruler:
+      alertmanager_url: http://alertmanager:9093
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+  namespace: pricing-agent-monitoring
+  labels:
+    app: loki
+    component: logging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+    spec:
+      serviceAccountName: loki
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+      - name: loki
+        image: grafana/loki:2.9.0
+        ports:
+        - containerPort: 3100
+          name: http
+        - containerPort: 9096
+          name: grpc
+        args:
+          - -config.file=/etc/loki/loki.yaml
+        volumeMounts:
+        - name: loki-config
+          mountPath: /etc/loki
+        - name: loki-storage
+          mountPath: /loki
+        livenessProbe:
+          httpGet:
+            path: /ready
+            port: 3100
+          initialDelaySeconds: 45
+          timeoutSeconds: 1
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3100
+          initialDelaySeconds: 45
+          timeoutSeconds: 1
+          periodSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+      volumes:
+      - name: loki-config
+        configMap:
+          name: loki-config
+      - name: loki-storage
+        persistentVolumeClaim:
+          claimName: loki-storage-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  namespace: pricing-agent-monitoring
+  labels:
+    app: loki
+    component: logging
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 3100
+    targetPort: 3100
+  - name: grpc
+    port: 9096
+    targetPort: 9096
+  selector:
+    app: loki
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: loki
+  namespace: pricing-agent-monitoring
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: loki-storage-pvc
+  namespace: pricing-agent-monitoring
+  labels:
+    app: loki
+    component: logging
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: gp3
+
+---
+# Promtail for log collection
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-config
+  namespace: pricing-agent-monitoring
+  labels:
+    app: promtail
+    component: logging
+data:
+  promtail.yaml: |
+    server:
+      http_listen_port: 3101
+      grpc_listen_port: 0
+
+    positions:
+      filename: /tmp/positions.yaml
+
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+
+    scrape_configs:
+    # Kubernetes pod logs
+    - job_name: kubernetes-pods
+      kubernetes_sd_configs:
+        - role: pod
+      pipeline_stages:
+        - cri: {}
+      relabel_configs:
+        - source_labels:
+            - __meta_kubernetes_pod_controller_name
+          regex: ([0-9a-z-.]+?)(-[0-9a-f]{8,10})?
+          target_label: __tmp_controller_name
+        - source_labels:
+            - __meta_kubernetes_pod_label_app_kubernetes_io_name
+            - __meta_kubernetes_pod_label_app
+            - __tmp_controller_name
+            - __meta_kubernetes_pod_name
+          regex: ^;*([^;]+)(;.*)?$
+          target_label: app
+          replacement: $1
+        - source_labels:
+            - __meta_kubernetes_pod_label_app_kubernetes_io_component
+            - __meta_kubernetes_pod_label_component
+          regex: ^;*([^;]+)(;.*)?$
+          target_label: component
+          replacement: $1
+        - source_labels:
+            - __meta_kubernetes_pod_node_name
+          target_label: node_name
+        - source_labels:
+            - __meta_kubernetes_namespace
+          target_label: namespace
+        - source_labels:
+            - __meta_kubernetes_pod_name
+          target_label: pod
+        - source_labels:
+            - __meta_kubernetes_pod_container_name
+          target_label: container
+        - source_labels:
+            - __meta_kubernetes_pod_label_app
+          regex: pricing-agent
+          action: keep
+        - replacement: /var/log/pods/*$1/*.log
+          separator: /
+          source_labels:
+            - __meta_kubernetes_pod_uid
+            - __meta_kubernetes_pod_container_name
+          target_label: __path__
+
+    # System logs
+    - job_name: system-logs
+      static_configs:
+        - targets:
+            - localhost
+          labels:
+            job: varlog
+            __path__: /var/log/*.log
+
+    # Application-specific logs
+    - job_name: pricing-django-logs
+      kubernetes_sd_configs:
+        - role: pod
+          namespaces:
+            names:
+              - pricing-agent
+      pipeline_stages:
+        - cri: {}
+        - regex:
+            expression: '(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) (?P<level>\w+) (?P<message>.*)'
+        - labels:
+            level:
+        - timestamp:
+            format: '2006-01-02 15:04:05,000'
+            source: timestamp
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_label_app]
+          regex: pricing-agent
+          action: keep
+        - source_labels: [__meta_kubernetes_pod_label_component]
+          regex: django
+          action: keep
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: pod
+        - source_labels: [__meta_kubernetes_namespace]
+          target_label: namespace
+        - replacement: /var/log/pods/*$1/*.log
+          separator: /
+          source_labels:
+            - __meta_kubernetes_pod_uid
+            - __meta_kubernetes_pod_container_name
+          target_label: __path__
+
+    - job_name: pricing-fastapi-logs
+      kubernetes_sd_configs:
+        - role: pod
+          namespaces:
+            names:
+              - pricing-agent
+      pipeline_stages:
+        - cri: {}
+        - json:
+            expressions:
+              level: level
+              message: message
+              timestamp: timestamp
+        - labels:
+            level:
+        - timestamp:
+            format: RFC3339
+            source: timestamp
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_pod_label_app]
+          regex: pricing-agent
+          action: keep
+        - source_labels: [__meta_kubernetes_pod_label_component]
+          regex: fastapi
+          action: keep
+        - source_labels: [__meta_kubernetes_pod_name]
+          target_label: pod
+        - source_labels: [__meta_kubernetes_namespace]
+          target_label: namespace
+        - replacement: /var/log/pods/*$1/*.log
+          separator: /
+          source_labels:
+            - __meta_kubernetes_pod_uid
+            - __meta_kubernetes_pod_container_name
+          target_label: __path__
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: promtail
+  namespace: pricing-agent-monitoring
+  labels:
+    app: promtail
+    component: logging
+spec:
+  selector:
+    matchLabels:
+      app: promtail
+  template:
+    metadata:
+      labels:
+        app: promtail
+    spec:
+      serviceAccountName: promtail
+      securityContext:
+        runAsUser: 0
+      containers:
+      - name: promtail
+        image: grafana/promtail:2.9.0
+        ports:
+        - containerPort: 3101
+          name: http
+        args:
+          - -config.file=/etc/promtail/promtail.yaml
+        env:
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        volumeMounts:
+        - name: promtail-config
+          mountPath: /etc/promtail
+        - name: varlog
+          mountPath: /var/log
+          readOnly: true
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+        - name: positions
+          mountPath: /tmp
+        livenessProbe:
+          httpGet:
+            path: /ready
+            port: 3101
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3101
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: promtail-config
+        configMap:
+          name: promtail-config
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+      - name: positions
+        hostPath:
+          path: /tmp/promtail-positions
+          type: DirectoryOrCreate
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: promtail
+  namespace: pricing-agent-monitoring
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: promtail
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - nodes/proxy
+  - services
+  - endpoints
+  - pods
+  verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: promtail
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: promtail
+subjects:
+- kind: ServiceAccount
+  name: promtail
+  namespace: pricing-agent-monitoring
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: promtail
+  namespace: pricing-agent-monitoring
+  labels:
+    app: promtail
+    component: logging
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 3101
+    targetPort: 3101
+  selector:
+    app: promtail
+
+---
+# LogQL queries ConfigMap for common log queries
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-queries
+  namespace: pricing-agent-monitoring
+  labels:
+    app: loki
+    component: logging
+data:
+  common-queries.txt: |
+    # Common LogQL queries for Pricing Agent
+
+    # All application logs
+    {namespace="pricing-agent"}
+
+    # Django application logs
+    {namespace="pricing-agent", app="pricing-agent", component="django"}
+
+    # FastAPI ML service logs
+    {namespace="pricing-agent", app="pricing-agent", component="fastapi"}
+
+    # Error logs across all services
+    {namespace="pricing-agent"} |= "ERROR"
+
+    # Critical logs
+    {namespace="pricing-agent"} |= "CRITICAL"
+
+    # 5xx HTTP errors
+    {namespace="pricing-agent"} |~ "HTTP.*5[0-9]{2}"
+
+    # ML prediction errors
+    {namespace="pricing-agent", component="fastapi"} |= "prediction" |= "error"
+
+    # Database connection errors
+    {namespace="pricing-agent"} |= "database" |= "connection" |= "error"
+
+    # Celery task failures
+    {namespace="pricing-agent"} |= "celery" |= "FAILURE"
+
+    # Rate limiting logs
+    {namespace="pricing-agent"} |= "rate limit"
+
+    # Authentication failures
+    {namespace="pricing-agent"} |= "authentication" |= "failed"
+
+    # Recent logs (last 1 hour)
+    {namespace="pricing-agent"} [1h]
+
+    # Log rate by service
+    sum by (component) (rate({namespace="pricing-agent"}[5m]))
+
+    # Error rate by service
+    sum by (component) (rate({namespace="pricing-agent"} |= "ERROR" [5m]))
+
+    # Top 10 error messages
+    topk(10, sum by (msg) (count_over_time({namespace="pricing-agent"} |= "ERROR" | json | line_format "{{.message}}" [1h])))
+
+    # Performance logs (slow queries)
+    {namespace="pricing-agent"} |= "slow" |= "query"
+
+    # Memory warnings
+    {namespace="pricing-agent"} |= "memory" |= "warning"
+
+    # Pod restart events
+    {namespace="pricing-agent"} |= "restart"

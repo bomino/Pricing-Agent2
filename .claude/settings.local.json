@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(cat:*)",
+      "Bash(findstr:*)",
+      "Bash(apply-migrations.bat)",
+      "Bash(cmd /c \"cd /d \"\"c:\\Users\\lawry\\Documents\\VSTX Projects\\VSTX-Project\\PricingProject\\Pricing_Agent - Analytics2\"\" && apply-migrations.bat\")",
+      "Bash(python manage.py migrate:*)",
+      "Bash(python manage.py runserver:*)",
+      "Bash(timeout:*)",
+      "Bash(python manage.py makemigrations:*)",
+      "Bash(echo:*)",
+      "Bash(test_procurement_data.csv)",
+      "Bash(python verify_price_history.py:*)",
+      "Bash(python:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

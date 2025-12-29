@@ -1,0 +1,175 @@
+{% load static %}
+<aside :class="sidebarOpen ? 'w-64' : 'w-20'" 
+       class="bg-gradient-to-b from-navy-900 to-navy-800 text-white transition-all duration-300 ease-in-out flex flex-col">
+    <!-- Logo Section -->
+    <div class="flex items-center justify-between h-20 px-4 border-b border-navy-700">
+        <div class="flex items-center">
+            <img src="{% static 'images/vtx_logo_white.png' %}" 
+                 alt="VTX Logo" 
+                 :class="sidebarOpen ? 'h-12' : 'h-10'" 
+                 class="transition-all duration-300">
+            <span x-show="sidebarOpen" 
+                  x-transition 
+                  class="ml-3 text-xl font-bold tracking-wide">
+                Pricing Agent
+            </span>
+        </div>
+        <button @click="sidebarOpen = !sidebarOpen" 
+                class="text-navy-300 hover:text-white transition-colors">
+            <i :class="sidebarOpen ? 'fa-chevron-left' : 'fa-chevron-right'" 
+               class="fas"></i>
+        </button>
+    </div>
+    
+    <!-- Navigation -->
+    <nav class="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar">
+        <div class="space-y-1">
+            <!-- Dashboard -->
+            <a href="/" 
+               class="nav-item flex items-center px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-navy-700 transition-colors group
+                      {% if request.path == '/' or 'dashboard' in request.path %}bg-navy-700{% endif %}">
+                <i class="fas fa-home text-navy-300 group-hover:text-white w-5 text-center"></i>
+                <span x-show="sidebarOpen" x-transition class="ml-3">Dashboard</span>
+            </a>
+            
+            <!-- Procurement Section -->
+            <div x-data="{ open: {% if 'procurement' in request.path %}true{% else %}false{% endif %} }">
+                <button @click="open = !open" 
+                        class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-navy-700 transition-colors group">
+                    <div class="flex items-center">
+                        <i class="fas fa-shopping-cart text-navy-300 group-hover:text-white w-5 text-center"></i>
+                        <span x-show="sidebarOpen" x-transition class="ml-3">Procurement</span>
+                    </div>
+                    <i x-show="sidebarOpen" 
+                       x-transition 
+                       :class="open ? 'fa-chevron-down' : 'fa-chevron-right'" 
+                       class="fas text-xs text-navy-300"></i>
+                </button>
+                <div x-show="open && sidebarOpen" 
+                     x-transition 
+                     class="ml-8 mt-1 space-y-1">
+                    <a href="/procurement/suppliers" 
+                       class="nav-sub-item block px-3 py-2 text-sm text-navy-300 hover:text-white hover:bg-navy-700 rounded-lg transition-colors
+                              {% if 'suppliers' in request.path %}bg-navy-700 text-white{% endif %}">
+                        Suppliers
+                    </a>
+                    <a href="/procurement/rfqs" 
+                       class="nav-sub-item block px-3 py-2 text-sm text-navy-300 hover:text-white hover:bg-navy-700 rounded-lg transition-colors
+                              {% if 'rfqs' in request.path %}bg-navy-700 text-white{% endif %}">
+                        RFQs
+                    </a>
+                    <a href="/procurement/quotes" 
+                       class="nav-sub-item block px-3 py-2 text-sm text-navy-300 hover:text-white hover:bg-navy-700 rounded-lg transition-colors
+                              {% if 'quotes' in request.path %}bg-navy-700 text-white{% endif %}">
+                        Quotes
+                    </a>
+                    <a href="/procurement/contracts" 
+                       class="nav-sub-item block px-3 py-2 text-sm text-navy-300 hover:text-white hover:bg-navy-700 rounded-lg transition-colors
+                              {% if 'contracts' in request.path %}bg-navy-700 text-white{% endif %}">
+                        Contracts
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Pricing Section -->
+            <div x-data="{ open: {% if 'pricing' in request.path %}true{% else %}false{% endif %} }">
+                <button @click="open = !open" 
+                        class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-navy-700 transition-colors group">
+                    <div class="flex items-center">
+                        <i class="fas fa-tags text-navy-300 group-hover:text-white w-5 text-center"></i>
+                        <span x-show="sidebarOpen" x-transition class="ml-3">Pricing</span>
+                    </div>
+                    <i x-show="sidebarOpen" 
+                       x-transition 
+                       :class="open ? 'fa-chevron-down' : 'fa-chevron-right'" 
+                       class="fas text-xs text-navy-300"></i>
+                </button>
+                <div x-show="open && sidebarOpen" 
+                     x-transition 
+                     class="ml-8 mt-1 space-y-1">
+                    <a href="/pricing/materials" 
+                       class="nav-sub-item block px-3 py-2 text-sm text-navy-300 hover:text-white hover:bg-navy-700 rounded-lg transition-colors
+                              {% if 'materials' in request.path %}bg-navy-700 text-white{% endif %}">
+                        Materials
+                    </a>
+                    <a href="/pricing/prices" 
+                       class="nav-sub-item block px-3 py-2 text-sm text-navy-300 hover:text-white hover:bg-navy-700 rounded-lg transition-colors
+                              {% if 'prices' in request.path %}bg-navy-700 text-white{% endif %}">
+                        Price History
+                    </a>
+                    <a href="/pricing/predictions" 
+                       class="nav-sub-item block px-3 py-2 text-sm text-navy-300 hover:text-white hover:bg-navy-700 rounded-lg transition-colors
+                              {% if 'predictions' in request.path %}bg-navy-700 text-white{% endif %}">
+                        Predictions
+                    </a>
+                    <a href="/pricing/alerts" 
+                       class="nav-sub-item block px-3 py-2 text-sm text-navy-300 hover:text-white hover:bg-navy-700 rounded-lg transition-colors
+                              {% if 'alerts' in request.path %}bg-navy-700 text-white{% endif %}">
+                        Alerts
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Data Upload -->
+            <a href="/data-ingestion/" 
+               class="nav-item flex items-center px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-navy-700 transition-colors group
+                      {% if 'data-ingestion' in request.path %}bg-navy-700{% endif %}">
+                <i class="fas fa-cloud-upload-alt text-navy-300 group-hover:text-white w-5 text-center"></i>
+                <span x-show="sidebarOpen" x-transition class="ml-3">Data Upload</span>
+            </a>
+            
+            <!-- Analytics & Insights -->
+            <a href="/analytics/" 
+               class="nav-item flex items-center px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-navy-700 transition-colors group
+                      {% if 'analytics' in request.path %}bg-navy-700{% endif %}">
+                <i class="fas fa-chart-bar text-navy-300 group-hover:text-white w-5 text-center"></i>
+                <span x-show="sidebarOpen" x-transition class="ml-3">Analytics & Insights</span>
+            </a>
+            
+            <!-- Admin -->
+            {% if user.is_staff or user.is_superuser %}
+            <a href="{% url 'admin:index' %}" 
+               class="nav-item flex items-center px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-navy-700 transition-colors group
+                      {% if 'admin' in request.path %}bg-navy-700{% endif %}">
+                <i class="fas fa-cogs text-navy-300 group-hover:text-white w-5 text-center"></i>
+                <span x-show="sidebarOpen" x-transition class="ml-3">Admin Panel</span>
+            </a>
+            {% endif %}
+        </div>
+    </nav>
+    
+    <!-- User Info -->
+    <div class="flex-shrink-0 flex border-t border-navy-700 p-4">
+        <div class="flex items-center">
+            <div class="flex-shrink-0">
+                <div class="w-10 h-10 bg-navy-600 rounded-full flex items-center justify-center">
+                    {% if user.is_authenticated %}
+                        <span class="text-white font-medium text-sm">
+                            {% if user.first_name and user.last_name %}
+                                {{ user.first_name.0|upper }}{{ user.last_name.0|upper }}
+                            {% else %}
+                                {{ user.username.0|upper }}{{ user.username.1|upper }}
+                            {% endif %}
+                        </span>
+                    {% else %}
+                        <i class="fas fa-user text-sm text-white"></i>
+                    {% endif %}
+                </div>
+            </div>
+            <div x-show="sidebarOpen" x-transition class="ml-3">
+                <p class="text-sm font-medium text-white">
+                    {{ user.get_full_name|default:user.username|default:"Guest" }}
+                </p>
+                <p class="text-xs text-navy-300">{{ user.email|default:"" }}</p>
+                {% if user.is_authenticated %}
+                <span class="inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded-full 
+                      {% if user.is_superuser %}bg-red-500 text-white
+                      {% elif user.is_staff %}bg-blue-500 text-white
+                      {% else %}bg-green-500 text-white{% endif %}">
+                    {% if user.is_superuser %}Admin{% elif user.is_staff %}Staff{% else %}User{% endif %}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</aside>

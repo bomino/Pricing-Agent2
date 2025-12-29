@@ -1,0 +1,301 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Price Analytics Dashboard{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s;
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+    }
+    .anomaly-high {
+        border-left: 4px solid #ef4444;
+    }
+    .anomaly-medium {
+        border-left: 4px solid #f59e0b;
+    }
+    .savings-card {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Price Analytics Dashboard</h1>
+            <p class="text-gray-600 mt-2">Real-time insights from {{ total_price_records }} price records</p>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="metric-card">
+                <h3 class="text-sm font-semibold opacity-90 mb-2">Total Price Records</h3>
+                <p class="text-3xl font-bold" id="total-records">Loading...</p>
+                <p class="text-sm opacity-75 mt-1">+<span id="week-updates">0</span> this week</p>
+            </div>
+            <div class="metric-card savings-card">
+                <h3 class="text-sm font-semibold opacity-90 mb-2">Potential Savings</h3>
+                <p class="text-3xl font-bold">$<span id="total-savings">0</span></p>
+                <p class="text-sm opacity-75 mt-1"><span id="opportunities-count">0</span> opportunities</p>
+            </div>
+            <div class="metric-card" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                <h3 class="text-sm font-semibold opacity-90 mb-2">Price Anomalies</h3>
+                <p class="text-3xl font-bold" id="anomalies-count">0</p>
+                <p class="text-sm opacity-75 mt-1">Detected today</p>
+            </div>
+            <div class="metric-card" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">
+                <h3 class="text-sm font-semibold opacity-90 mb-2">Materials Tracked</h3>
+                <p class="text-3xl font-bold" id="materials-count">0</p>
+                <p class="text-sm opacity-75 mt-1">With price history</p>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Price Trends Chart -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Price Trends (Last 30 Days)</h2>
+                <canvas id="priceTrendsChart" height="200"></canvas>
+            </div>
+
+            <!-- Top Savings Opportunities -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Top Savings Opportunities</h2>
+                <div id="savings-list" class="space-y-3">
+                    <p class="text-gray-500">Loading opportunities...</p>
+                </div>
+            </div>
+
+            <!-- Price Anomalies -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Price Anomalies</h2>
+                <div id="anomalies-list" class="space-y-3">
+                    <p class="text-gray-500">Analyzing price patterns...</p>
+                </div>
+            </div>
+
+            <!-- Upload Impact -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Upload Impact</h2>
+                <div id="upload-impact" class="space-y-3">
+                    <p class="text-gray-500">Loading upload statistics...</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Supplier Comparison -->
+        <div class="bg-white p-6 rounded-lg shadow mt-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Supplier Price Comparison</h2>
+            <div id="supplier-comparison" class="overflow-x-auto">
+                <p class="text-gray-500">Loading supplier data...</p>
+            </div>
+        </div>
+
+        <!-- Price Forecast -->
+        <div class="bg-white p-6 rounded-lg shadow mt-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Price Forecast</h2>
+            <div class="mb-4">
+                <select id="forecast-material" class="px-3 py-2 border border-gray-300 rounded-lg">
+                    <option value="">Select a material for forecast...</option>
+                </select>
+            </div>
+            <canvas id="forecastChart" height="150"></canvas>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// Load dashboard data
+async function loadDashboardData() {
+    try {
+        const response = await fetch('/analytics/api/dashboard-data/');
+        const data = await response.json();
+
+        if (data.success) {
+            updateDashboard(data.data);
+        }
+    } catch (error) {
+        console.error('Error loading dashboard:', error);
+    }
+}
+
+// Update dashboard elements
+function updateDashboard(data) {
+    // Update summary stats
+    if (data.summary) {
+        document.getElementById('total-records').textContent = data.summary.total_price_records || 0;
+        document.getElementById('week-updates').textContent = data.summary.price_updates_week || 0;
+        document.getElementById('materials-count').textContent = data.summary.materials_tracked || 0;
+        document.getElementById('anomalies-count').textContent = data.summary.anomalies_detected || 0;
+    }
+
+    // Update anomalies list
+    if (data.recent_anomalies && data.recent_anomalies.length > 0) {
+        const anomaliesList = document.getElementById('anomalies-list');
+        anomaliesList.innerHTML = data.recent_anomalies.map(anomaly => `
+            <div class="p-3 bg-gray-50 rounded ${anomaly.severity === 'high' ? 'anomaly-high' : 'anomaly-medium'}">
+                <div class="flex justify-between">
+                    <span class="font-medium">${anomaly.material}</span>
+                    <span class="text-sm ${anomaly.deviation_pct > 0 ? 'text-red-600' : 'text-green-600'}">
+                        ${anomaly.deviation_pct > 0 ? '+' : ''}${anomaly.deviation_pct.toFixed(1)}%
+                    </span>
+                </div>
+                <div class="text-sm text-gray-600 mt-1">
+                    Current: $${anomaly.current_price.toFixed(2)} | Avg: $${anomaly.avg_price.toFixed(2)}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Update savings opportunities
+    if (data.top_savings && data.top_savings.length > 0) {
+        const savingsList = document.getElementById('savings-list');
+        const totalSavings = data.top_savings.reduce((sum, opp) => sum + opp.estimated_annual_saving, 0);
+
+        document.getElementById('total-savings').textContent = totalSavings.toFixed(0);
+        document.getElementById('opportunities-count').textContent = data.top_savings.length;
+
+        savingsList.innerHTML = data.top_savings.map(opp => `
+            <div class="p-3 bg-green-50 rounded border-l-4 border-green-500">
+                <div class="flex justify-between">
+                    <span class="font-medium">${opp.material}</span>
+                    <span class="text-green-600 font-semibold">-${opp.saving_pct}%</span>
+                </div>
+                <div class="text-sm text-gray-600 mt-1">
+                    Save $${opp.saving_per_unit.toFixed(2)}/unit with ${opp.best_supplier}
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                    Annual: $${opp.estimated_annual_saving.toFixed(0)}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Update upload impact
+    if (data.upload_impact && data.upload_impact.length > 0) {
+        const uploadImpact = document.getElementById('upload-impact');
+        uploadImpact.innerHTML = data.upload_impact.map(upload => `
+            <div class="p-3 bg-blue-50 rounded">
+                <div class="font-medium text-sm">${upload.filename}</div>
+                <div class="text-sm text-gray-600 mt-1">
+                    ${upload.price_records_created} prices | ${upload.unique_materials} materials | ${upload.unique_suppliers} suppliers
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                    ${new Date(upload.uploaded_at).toLocaleDateString()}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Update price trends chart
+    if (data.price_trends) {
+        updatePriceTrendsChart(data.price_trends);
+    }
+}
+
+// Load additional data
+async function loadSupplierComparison() {
+    try {
+        const response = await fetch('/analytics/api/supplier-comparison/');
+        const data = await response.json();
+
+        if (data.success && data.data.length > 0) {
+            const comparisonDiv = document.getElementById('supplier-comparison');
+            comparisonDiv.innerHTML = '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+                data.data.slice(0, 4).map(item => `
+                    <div class="border rounded p-3">
+                        <h4 class="font-medium mb-2">${item.material}</h4>
+                        <div class="space-y-1">
+                            ${item.suppliers.map(sup => `
+                                <div class="flex justify-between text-sm">
+                                    <span>${sup.supplier__name || 'Unknown'}</span>
+                                    <span class="font-medium">$${sup.avg_price.toFixed(2)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('') + '</div>';
+        }
+    } catch (error) {
+        console.error('Error loading supplier comparison:', error);
+    }
+}
+
+// Price trends chart
+let priceTrendsChart;
+function updatePriceTrendsChart(trends) {
+    const ctx = document.getElementById('priceTrendsChart').getContext('2d');
+
+    if (priceTrendsChart) {
+        priceTrendsChart.destroy();
+    }
+
+    // Prepare datasets for up to 3 materials
+    const datasets = [];
+    const colors = ['#3b82f6', '#10b981', '#f59e0b'];
+    let colorIndex = 0;
+
+    Object.keys(trends).slice(0, 3).forEach(material => {
+        datasets.push({
+            label: material,
+            data: trends[material].avg_prices,
+            borderColor: colors[colorIndex % colors.length],
+            backgroundColor: colors[colorIndex % colors.length] + '20',
+            tension: 0.4
+        });
+        colorIndex++;
+    });
+
+    priceTrendsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: Object.values(trends)[0]?.labels || [],
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+    loadSupplierComparison();
+
+    // Refresh data every 30 seconds
+    setInterval(loadDashboardData, 30000);
+});
+</script>
+{% endblock %}

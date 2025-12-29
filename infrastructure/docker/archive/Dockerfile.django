@@ -1,0 +1,119 @@
+# Multi-stage Django Dockerfile for production-ready deployment
+ARG PYTHON_VERSION=3.11
+ARG ALPINE_VERSION=3.19
+
+# Base stage with system dependencies
+FROM python:${PYTHON_VERSION}-alpine${ALPINE_VERSION} AS base
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    POETRY_HOME="/opt/poetry" \
+    POETRY_VERSION=1.8.2
+
+# Install system dependencies
+RUN apk add --no-cache \
+    postgresql-dev \
+    gcc \
+    g++ \
+    python3-dev \
+    musl-dev \
+    libffi-dev \
+    openssl-dev \
+    cmake \
+    make \
+    curl \
+    bash \
+    git \
+    linux-headers \
+    && addgroup -g 1001 -S appgroup \
+    && adduser -u 1001 -S appuser -G appgroup
+
+# Install Poetry
+RUN pip install --no-cache-dir poetry==$POETRY_VERSION
+
+# Dependencies stage
+FROM base AS dependencies
+
+WORKDIR /app
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock ./
+
+# Install dependencies
+RUN poetry install --only=main --no-interaction --no-ansi \
+    && rm -rf $POETRY_CACHE_DIR
+
+# Development stage
+FROM dependencies AS development
+
+# Install dev dependencies
+RUN poetry install --no-interaction --no-ansi \
+    && rm -rf $POETRY_CACHE_DIR
+
+# Copy application code
+COPY --chown=appuser:appgroup . .
+
+# Set working directory and user
+USER appuser
+WORKDIR /app
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+# Default command for development
+CMD ["poetry", "run", "python", "django_app/manage.py", "runserver", "0.0.0.0:8000"]
+
+# Production stage
+FROM dependencies AS production
+
+# Install additional production dependencies
+RUN apk add --no-cache \
+    supervisor \
+    nginx
+
+# Copy application code
+COPY --chown=appuser:appgroup . .
+
+# Copy configuration files
+COPY infrastructure/docker/django/nginx.conf /etc/nginx/nginx.conf
+COPY infrastructure/docker/django/supervisord.conf /etc/supervisord.conf
+COPY infrastructure/docker/django/gunicorn.conf.py /app/gunicorn.conf.py
+COPY infrastructure/docker/django/entrypoint.sh /app/entrypoint.sh
+
+# Set executable permissions
+RUN chmod +x /app/entrypoint.sh
+
+# Create necessary directories
+RUN mkdir -p /app/staticfiles /app/media /app/logs \
+    && chown -R appuser:appgroup /app/staticfiles /app/media /app/logs \
+    && chown -R appuser:appgroup /var/log/nginx \
+    && chown -R appuser:appgroup /var/lib/nginx
+
+# Collect static files
+USER appuser
+WORKDIR /app
+RUN poetry run python django_app/manage.py collectstatic --noinput
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+# Use entrypoint script
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Security scanning stage
+FROM aquasec/trivy:latest AS security-scan
+COPY --from=production /app /scan-target
+RUN trivy fs --exit-code 1 --severity HIGH,CRITICAL /scan-target

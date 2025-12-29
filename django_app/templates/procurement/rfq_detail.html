@@ -1,0 +1,323 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}RFQ Details - {{ rfq.rfq_number }}{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Header -->
+    <div class="mb-6 flex justify-between items-start">
+        <div>
+            <div class="flex items-center space-x-3 mb-2">
+                <a href="{% url 'procurement:rfq_list' %}" class="text-navy-600 hover:text-navy-800">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h1 class="text-3xl font-bold text-gray-900">{{ rfq.title }}</h1>
+            </div>
+            <div class="flex items-center space-x-4 text-sm text-gray-600">
+                <span><i class="fas fa-hashtag mr-1"></i>{{ rfq.rfq_number }}</span>
+                <span><i class="fas fa-calendar mr-1"></i>Created {{ rfq.created_at|date:"M d, Y" }}</span>
+                <span class="status-badge status-{{ rfq.status }}">{{ rfq.get_status_display }}</span>
+            </div>
+        </div>
+        <div class="flex space-x-3">
+            {% if rfq.status == 'draft' %}
+            <button onclick="window.location.href='{% url 'procurement:rfq_edit' rfq.id %}'"
+                    class="btn btn-secondary">
+                <i class="fas fa-edit mr-2"></i> Edit RFQ
+            </button>
+            <button onclick="publishRFQ({{ rfq.id }})" class="btn btn-primary">
+                <i class="fas fa-paper-plane mr-2"></i> Publish RFQ
+            </button>
+            {% elif rfq.status == 'published' %}
+            <button onclick="viewResponses({{ rfq.id }})" class="btn btn-primary">
+                <i class="fas fa-inbox mr-2"></i> View Responses
+            </button>
+            {% endif %}
+            <button onclick="exportRFQ({{ rfq.id }})" class="btn btn-outline">
+                <i class="fas fa-download mr-2"></i> Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column - RFQ Details -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Description -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">Description</h2>
+                <p class="text-gray-700 whitespace-pre-wrap">{{ rfq.description }}</p>
+            </div>
+
+            <!-- Items -->
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-lg font-semibold">Requested Items</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Description</th>
+                                <th>Quantity</th>
+                                <th>Unit</th>
+                                <th>Specifications</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in rfq_items %}
+                            <tr>
+                                <td class="font-medium">{{ item.material.name }}</td>
+                                <td>{{ item.description|default:"-" }}</td>
+                                <td class="text-right">{{ item.quantity }}</td>
+                                <td>{{ item.unit }}</td>
+                                <td>
+                                    {% if item.specifications %}
+                                    <button onclick="viewSpecs('{{ item.specifications|escapejs }}')" 
+                                            class="text-navy-600 hover:text-navy-800">
+                                        <i class="fas fa-info-circle"></i> View
+                                    </button>
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-gray-500">No items added yet</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Quotes Received -->
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h2 class="text-lg font-semibold">Quotes Received</h2>
+                    <span class="text-sm text-gray-600">{{ quotes.count }} of {{ rfq.invited_suppliers.count }} suppliers responded</span>
+                </div>
+                <div class="p-6">
+                    {% if quotes %}
+                    <div class="space-y-4">
+                        {% for quote in quotes %}
+                        <div class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-medium text-gray-900">{{ quote.supplier.name }}</h3>
+                                    <div class="mt-1 text-sm text-gray-600">
+                                        <span>Quote #{{ quote.quote_number }}</span>
+                                        <span class="mx-2">•</span>
+                                        <span>Submitted {{ quote.created_at|date:"M d, Y" }}</span>
+                                    </div>
+                                    <div class="mt-2">
+                                        <span class="text-2xl font-bold text-navy-900">${{ quote.total_value|floatformat:2 }}</span>
+                                        <span class="ml-2 text-sm text-gray-600">Total Value</span>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col space-y-2">
+                                    <span class="status-badge status-{{ quote.status }}">
+                                        {{ quote.get_status_display }}
+                                    </span>
+                                    <a href="{% url 'procurement:quote_detail' quote.id %}" 
+                                       class="btn btn-sm btn-outline">
+                                        View Details
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    {% if quotes.count > 1 %}
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <button onclick="window.location.href='{% url 'procurement:quote_comparison' %}?rfq_id={{ rfq.id }}'"
+                                class="btn btn-primary w-full">
+                            <i class="fas fa-balance-scale mr-2"></i> Compare All Quotes
+                        </button>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="text-center py-8 text-gray-500">
+                        <i class="fas fa-inbox text-4xl mb-3"></i>
+                        <p>No quotes received yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Sidebar -->
+        <div class="space-y-6">
+            <!-- Key Information -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">Key Information</h2>
+                <dl class="space-y-3">
+                    <div>
+                        <dt class="text-sm text-gray-600">Response Deadline</dt>
+                        <dd class="font-medium">{{ rfq.deadline|date:"M d, Y H:i" }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-gray-600">Required Delivery Date</dt>
+                        <dd class="font-medium">{{ rfq.required_delivery_date|date:"M d, Y"|default:"-" }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-gray-600">Delivery Terms</dt>
+                        <dd class="font-medium">{{ rfq.delivery_terms|default:"-" }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-sm text-gray-600">Created By</dt>
+                        <dd class="font-medium">{{ rfq.created_by.get_full_name }}</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <!-- Invited Suppliers -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">Invited Suppliers</h2>
+                <div class="space-y-2">
+                    {% for supplier in rfq.invited_suppliers.all %}
+                    <div class="flex items-center justify-between py-2">
+                        <div class="flex items-center">
+                            <div class="w-8 h-8 bg-navy-100 rounded-full flex items-center justify-center mr-3">
+                                <span class="text-xs font-medium text-navy-600">
+                                    {{ supplier.name|slice:":2"|upper }}
+                                </span>
+                            </div>
+                            <div>
+                                <a href="{% url 'procurement:supplier_detail' supplier.id %}"
+                                   class="text-sm font-medium text-gray-900 hover:text-navy-600">
+                                    {{ supplier.name }}
+                                </a>
+                                <p class="text-xs text-gray-500">{{ supplier.contact_email }}</p>
+                            </div>
+                        </div>
+                        {% if supplier in quotes.values_list.supplier %}
+                        <i class="fas fa-check-circle text-green-500"></i>
+                        {% else %}
+                        <i class="fas fa-clock text-gray-400"></i>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="text-sm text-gray-500">No suppliers invited yet</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Terms & Conditions -->
+            {% if rfq.terms_and_conditions %}
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">Terms & Conditions</h2>
+                <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ rfq.terms_and_conditions }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Actions -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold mb-4">Actions</h2>
+                <div class="space-y-2">
+                    <button onclick="duplicateRFQ({{ rfq.id }})" class="btn btn-outline w-full">
+                        <i class="fas fa-copy mr-2"></i> Duplicate RFQ
+                    </button>
+                    <button onclick="printRFQ({{ rfq.id }})" class="btn btn-outline w-full">
+                        <i class="fas fa-print mr-2"></i> Print RFQ
+                    </button>
+                    {% if is_admin %}
+                    <button onclick="deleteRFQ({{ rfq.id }})" class="btn btn-outline-danger w-full">
+                        <i class="fas fa-trash mr-2"></i> Delete RFQ
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Specifications Modal -->
+<div id="specs-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="text-xl font-bold">Item Specifications</h2>
+            <button onclick="closeModal('specs-modal')" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="specs-content" class="modal-body">
+            <!-- Specifications content -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+function publishRFQ(id) {
+    if (confirm('Are you sure you want to publish this RFQ?')) {
+        fetch(`/procurement/rfqs/${id}/send/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            }
+        });
+    }
+}
+
+function viewSpecs(specs) {
+    document.getElementById('specs-content').innerHTML = `<pre class="whitespace-pre-wrap">${specs}</pre>`;
+    document.getElementById('specs-modal').style.display = 'block';
+}
+
+function closeModal(id) {
+    document.getElementById(id).style.display = 'none';
+}
+
+function duplicateRFQ(id) {
+    // Implementation for duplicating RFQ
+    console.log('Duplicate RFQ:', id);
+}
+
+function printRFQ(id) {
+    window.print();
+}
+
+function deleteRFQ(id) {
+    // Navigate to the delete confirmation page
+    window.location.href = `/procurement/rfqs/${id}/delete/`;
+}
+
+function exportRFQ(id) {
+    // Implementation for exporting RFQ
+    window.location.href = `/procurement/rfqs/${id}/export/`;
+}
+
+function viewResponses(id) {
+    // Navigate to quotes with RFQ filter
+    window.location.href = `/procurement/quotes/?rfq_id=${id}`;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

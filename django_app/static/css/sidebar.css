@@ -1,0 +1,148 @@
+/* Sidebar Custom Styles */
+.sidebar-gradient {
+    background: linear-gradient(180deg, #0a1929 0%, #1a2332 100%);
+}
+
+/* Sidebar Navigation Items */
+.nav-item {
+    position: relative;
+    transition: all 0.2s ease;
+    border-radius: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.nav-item:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.nav-item.active {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-left: 3px solid #4f46e5;
+    padding-left: calc(0.75rem - 3px);
+}
+
+/* Sidebar Sub-items */
+.nav-sub-item {
+    position: relative;
+    padding-left: 2.5rem;
+    transition: all 0.2s ease;
+    border-radius: 0.375rem;
+    margin-bottom: 0.125rem;
+}
+
+.nav-sub-item:before {
+    content: '';
+    position: absolute;
+    left: 1.25rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+}
+
+.nav-sub-item:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.nav-sub-item:hover:before {
+    background-color: rgba(255, 255, 255, 0.6);
+}
+
+.nav-sub-item.active {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: white;
+}
+
+.nav-sub-item.active:before {
+    width: 6px;
+    height: 6px;
+    background-color: #4f46e5;
+}
+
+/* Sidebar Logo Section */
+.sidebar-logo {
+    display: flex;
+    align-items: center;
+    padding: 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Sidebar User Section */
+.sidebar-user {
+    padding: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Sidebar Scrollbar */
+.sidebar-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Sidebar Toggle Button */
+.sidebar-toggle {
+    transition: transform 0.3s ease;
+}
+
+.sidebar-toggle:hover {
+    transform: scale(1.1);
+}
+
+/* Sidebar Icons */
+.nav-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Sidebar Transitions */
+.sidebar-transition {
+    transition: width 0.3s ease, padding 0.3s ease;
+}
+
+/* Active Path Highlighting */
+[data-current-path] .nav-item[data-path] {
+    position: relative;
+}
+
+[data-current-path*="/data-ingestion"] .nav-item[data-path="/data-ingestion"] {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-left: 3px solid #4f46e5;
+    padding-left: calc(0.75rem - 3px);
+}
+
+[data-current-path*="/analytics"] .nav-item[data-path="/analytics"] {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-left: 3px solid #4f46e5;
+    padding-left: calc(0.75rem - 3px);
+}
+
+[data-current-path*="/procurement"] .nav-item[data-path="/procurement"] {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-left: 3px solid #4f46e5;
+    padding-left: calc(0.75rem - 3px);
+}
+
+[data-current-path*="/pricing"] .nav-item[data-path="/pricing"] {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-left: 3px solid #4f46e5;
+    padding-left: calc(0.75rem - 3px);
+}

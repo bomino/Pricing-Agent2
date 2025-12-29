@@ -1,0 +1,216 @@
+# Prometheus Alert Rules for AI Pricing Agent ML Service
+groups:
+  - name: ml_service_alerts
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "High error rate detected in ML service"
+          description: "ML service error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      # High response time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "High response time in ML service"
+          description: "95th percentile response time is {{ $value }}s"
+
+      # Low cache hit rate
+      - alert: LowCacheHitRate
+        expr: cache_hit_rate < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "Low cache hit rate"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}"
+
+      # Model prediction failures
+      - alert: ModelPredictionFailures
+        expr: increase(ml_predictions_total{status="failed"}[10m]) > 50
+        for: 2m
+        labels:
+          severity: critical
+          service: ml-service
+        annotations:
+          summary: "High number of model prediction failures"
+          description: "{{ $value }} prediction failures in the last 10 minutes"
+
+      # ML service down
+      - alert: MLServiceDown
+        expr: up{job="ml-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: ml-service
+        annotations:
+          summary: "ML service is down"
+          description: "ML service has been down for more than 1 minute"
+
+      # Low model confidence
+      - alert: LowModelConfidence
+        expr: avg(prediction_confidence_score) < 0.7
+        for: 15m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "Low average model confidence"
+          description: "Average prediction confidence is {{ $value | humanizePercentage }}"
+
+      # Model drift detected
+      - alert: ModelDriftDetected
+        expr: model_drift_score > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "Model drift detected"
+          description: "Model {{ $labels.model_name }} has drift score of {{ $value }}"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes / 1024 / 1024 / 1024) > 6
+        for: 5m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "High memory usage in ML service"
+          description: "ML service is using {{ $value }}GB of memory"
+
+      # Database connection issues
+      - alert: DatabaseConnectionFailure
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection failure"
+          description: "Cannot connect to PostgreSQL database"
+
+      # Redis connection issues
+      - alert: RedisConnectionFailure
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: cache
+        annotations:
+          summary: "Redis connection failure"
+          description: "Cannot connect to Redis cache"
+
+      # MLflow server issues
+      - alert: MLflowServerDown
+        expr: up{job="mlflow"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: mlflow
+        annotations:
+          summary: "MLflow server is down"
+          description: "MLflow server is not accessible"
+
+      # High prediction volume
+      - alert: HighPredictionVolume
+        expr: rate(ml_predictions_total[5m]) > 100
+        for: 10m
+        labels:
+          severity: info
+          service: ml-service
+        annotations:
+          summary: "High prediction volume"
+          description: "Prediction rate is {{ $value }} predictions per second"
+
+      # Low prediction volume (might indicate issues)
+      - alert: LowPredictionVolume
+        expr: rate(ml_predictions_total[10m]) < 1
+        for: 15m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "Low prediction volume"
+          description: "Prediction rate is {{ $value }} predictions per second over last 10 minutes"
+
+  - name: system_alerts
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: (100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # High disk usage
+      - alert: HighDiskUsage
+        expr: (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"} * 100) < 20
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # Out of memory
+      - alert: OutOfMemory
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100) < 10
+        for: 2m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Out of memory"
+          description: "Available memory is {{ $value }}% on {{ $labels.instance }}"
+
+  - name: business_alerts
+    rules:
+      # Anomaly detection rate too high
+      - alert: HighAnomalyRate
+        expr: (anomalies_detected_total / predictions_total * 100) > 10
+        for: 30m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "High anomaly detection rate"
+          description: "{{ $value }}% of predictions are flagged as anomalies"
+
+      # Price prediction accuracy drop
+      - alert: PredictionAccuracyDrop
+        expr: prediction_accuracy < 0.85
+        for: 1h
+        labels:
+          severity: critical
+          service: ml-service
+        annotations:
+          summary: "Prediction accuracy dropped"
+          description: "Model accuracy is {{ $value | humanizePercentage }}"
+
+      # Should-cost model deviation
+      - alert: ShouldCostDeviation
+        expr: abs(predicted_price - should_cost_price) / should_cost_price > 0.2
+        for: 30m
+        labels:
+          severity: warning
+          service: ml-service
+        annotations:
+          summary: "High deviation between predicted and should-cost prices"
+          description: "Average deviation is {{ $value | humanizePercentage }}"

@@ -1,0 +1,39 @@
+# Development requirements
+-r base.txt
+
+# Django Development
+django-debug-toolbar==4.2.0
+django-silk==5.0.4
+ipython==8.20.0
+
+# Testing
+pytest==7.4.4
+pytest-django==4.7.0
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+factory-boy==3.3.0
+faker==22.2.0
+responses==0.24.1
+freezegun==1.4.0
+
+# Code Quality
+black==24.1.1
+ruff==0.1.14
+mypy==1.8.0
+pre-commit==3.6.0
+flake8==7.0.0
+isort==5.13.2
+
+# Documentation
+mkdocs==1.5.3
+mkdocs-material==9.5.4
+
+# Debugging
+ipdb==0.13.13
+django-querycount==0.8.3
+rich==13.7.0
+
+# Windows-specific (for development on Windows)
+pywin32==306; sys_platform == 'win32'
+colorama==0.4.6
+eventlet==0.34.2; sys_platform == 'win32'

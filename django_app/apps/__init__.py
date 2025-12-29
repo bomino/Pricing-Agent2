@@ -1,0 +1,1 @@
+# Apps module for AI Pricing Agent Django application

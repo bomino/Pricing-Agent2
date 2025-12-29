@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Upload Data - AI Pricing Agent{% endblock %}
+
+{% block extra_head %}
+<style>
+    .upload-zone {
+        border: 2px dashed #627d98;
+        border-radius: 12px;
+        padding: 3rem;
+        text-align: center;
+        background: linear-gradient(135deg, #f0f4f8 0%, #ffffff 100%);
+        transition: all 0.3s ease;
+        position: relative;
+        min-height: 300px;
+    }
+    
+    .upload-zone.dragover {
+        border-color: #243b53;
+        background: linear-gradient(135deg, #e3e9f0 0%, #f0f4f8 100%);
+        transform: scale(1.02);
+    }
+    
+    .file-icon {
+        font-size: 4rem;
+        color: #627d98;
+        margin-bottom: 1rem;
+    }
+    
+    .supported-formats {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .format-badge {
+        padding: 0.25rem 0.75rem;
+        background: #243b53;
+        color: white;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    
+    .upload-progress {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: #e5e7eb;
+        border-radius: 0 0 12px 12px;
+        overflow: hidden;
+    }
+    
+    .upload-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #243b53 0%, #627d98 100%);
+        transition: width 0.3s ease;
+    }
+    
+    .file-preview {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .validation-item {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem;
+        border-radius: 6px;
+        margin-bottom: 0.5rem;
+    }
+    
+    .validation-item.success {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    
+    .validation-item.warning {
+        background: #fed7aa;
+        color: #92400e;
+    }
+    
+    .validation-item.error {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="uploadManager()">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-navy-900">Upload Procurement Data</h1>
+                <p class="text-gray-600 mt-1">Upload your files for analysis and benchmarking</p>
+            </div>
+            <a href="/data-ingestion/" class="px-4 py-2 text-navy-600 bg-white border border-navy-600 rounded-lg hover:bg-navy-50 transition-colors">
+                <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Upload Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Upload Area -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-navy-800 to-navy-700 rounded-t-lg">
+                    <h2 class="text-lg font-semibold text-white flex items-center">
+                        <i class="fas fa-cloud-upload-alt mr-2"></i> File Upload
+                    </h2>
+                </div>
+                
+                <div class="p-6">
+                    <!-- Data Type Selection -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Select Data Type <span class="text-red-500">*</span>
+                        </label>
+                        <select x-model="dataType" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500">
+                            <option value="purchase_orders">Purchase Orders</option>
+                            <option value="invoices">Invoices</option>
+                            <option value="contracts">Contracts</option>
+                            <option value="suppliers">Supplier Master Data</option>
+                            <option value="materials">Material Master Data</option>
+                            <option value="spend_data">Spend Analysis</option>
+                            <option value="price_history">Historical Prices</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">This helps us better understand your data structure</p>
+                    </div>
+
+                    <!-- Upload Zone -->
+                    <div class="upload-zone"
+                         @dragover.prevent="dragover = true"
+                         @dragleave.prevent="dragover = false"
+                         @drop.prevent="handleDrop($event)"
+                         :class="{ 'dragover': dragover }">
+                        
+                        <template x-if="!selectedFile">
+                            <div>
+                                <i class="fas fa-cloud-upload-alt file-icon"></i>
+                                <h3 class="text-xl font-semibold text-navy-900 mb-2">
+                                    Drag & Drop your file here
+                                </h3>
+                                <p class="text-gray-600 mb-4">or</p>
+                                <input type="file" 
+                                       id="fileInput" 
+                                       @change="handleFileSelect($event)"
+                                       accept=".csv,.xlsx,.xls,.parquet"
+                                       class="hidden">
+                                <label for="fileInput" 
+                                       class="px-6 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors cursor-pointer inline-block">
+                                    <i class="fas fa-folder-open mr-2"></i>Browse Files
+                                </label>
+                                
+                                <div class="supported-formats mt-6">
+                                    <span class="format-badge">CSV</span>
+                                    <span class="format-badge">XLSX</span>
+                                    <span class="format-badge">XLS</span>
+                                    <span class="format-badge">Parquet</span>
+                                </div>
+                                
+                                <p class="text-sm text-gray-500 mt-4">
+                                    Maximum file size: 50MB
+                                </p>
+                            </div>
+                        </template>
+                        
+                        <template x-if="selectedFile">
+                            <div>
+                                <div class="file-preview">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center">
+                                            <i class="fas fa-file-alt text-3xl text-navy-600 mr-3"></i>
+                                            <div>
+                                                <p class="font-semibold text-navy-900" x-text="selectedFile.name"></p>
+                                                <p class="text-sm text-gray-500" x-text="formatFileSize(selectedFile.size)"></p>
+                                            </div>
+                                        </div>
+                                        <button @click="removeFile()" 
+                                                class="text-red-600 hover:text-red-800 transition-colors">
+                                            <i class="fas fa-times-circle text-xl"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <button @click="uploadFile()" 
+                                        :disabled="uploading"
+                                        class="w-full mt-4 px-6 py-3 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <span x-show="!uploading">
+                                        <i class="fas fa-upload mr-2"></i>Upload & Analyze
+                                    </span>
+                                    <span x-show="uploading">
+                                        <i class="fas fa-spinner fa-spin mr-2"></i>Uploading...
+                                    </span>
+                                </button>
+                            </div>
+                        </template>
+                        
+                        <!-- Progress bar -->
+                        <div class="upload-progress" x-show="uploadProgress > 0">
+                            <div class="upload-progress-bar" :style="`width: ${uploadProgress}%`"></div>
+                        </div>
+                    </div>
+
+                    <!-- Validation Results -->
+                    <div x-show="validationResults.length > 0" class="mt-6">
+                        <h3 class="text-lg font-semibold text-navy-900 mb-3">
+                            <i class="fas fa-check-circle mr-2"></i>Validation Results
+                        </h3>
+                        <div class="space-y-2">
+                            <template x-for="result in validationResults" :key="result.message">
+                                <div class="validation-item" :class="result.type">
+                                    <i class="fas mr-2" 
+                                       :class="{
+                                           'fa-check-circle': result.type === 'success',
+                                           'fa-exclamation-triangle': result.type === 'warning',
+                                           'fa-times-circle': result.type === 'error'
+                                       }"></i>
+                                    <span x-text="result.message"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Panel -->
+        <div class="space-y-6">
+            <!-- Quick Stats -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="font-semibold text-navy-900">Recent Uploads</h3>
+                </div>
+                <div class="p-6">
+                    <div class="space-y-3">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Today</span>
+                            <span class="font-semibold">3 files</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">This Week</span>
+                            <span class="font-semibold">12 files</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Total Processed</span>
+                            <span class="font-semibold">248 files</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Instructions -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="font-semibold text-navy-900">
+                        <i class="fas fa-info-circle mr-2"></i>Instructions
+                    </h3>
+                </div>
+                <div class="p-6">
+                    <ol class="space-y-3 text-sm text-gray-600">
+                        <li class="flex">
+                            <span class="text-navy-600 font-semibold mr-2">1.</span>
+                            Select the type of data you're uploading
+                        </li>
+                        <li class="flex">
+                            <span class="text-navy-600 font-semibold mr-2">2.</span>
+                            Drag & drop or browse to select your file
+                        </li>
+                        <li class="flex">
+                            <span class="text-navy-600 font-semibold mr-2">3.</span>
+                            We'll automatically detect your data schema
+                        </li>
+                        <li class="flex">
+                            <span class="text-navy-600 font-semibold mr-2">4.</span>
+                            Map your columns to our standard fields
+                        </li>
+                        <li class="flex">
+                            <span class="text-navy-600 font-semibold mr-2">5.</span>
+                            Review validation and start analysis
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Data Requirements -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 class="font-semibold text-blue-900 mb-2">
+                    <i class="fas fa-lightbulb mr-2"></i>Tips for Best Results
+                </h4>
+                <ul class="text-sm text-blue-800 space-y-1">
+                    <li>• Include headers in first row</li>
+                    <li>• Use consistent date formats</li>
+                    <li>• Ensure supplier names are consistent</li>
+                    <li>• Include currency codes if multi-currency</li>
+                    <li>• Remove any sensitive information</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function uploadManager() {
+    return {
+        selectedFile: null,
+        dataType: 'purchase_orders',
+        dragover: false,
+        uploading: false,
+        uploadProgress: 0,
+        validationResults: [],
+        
+        handleDrop(event) {
+            this.dragover = false;
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                this.validateAndSetFile(files[0]);
+            }
+        },
+        
+        handleFileSelect(event) {
+            const files = event.target.files;
+            if (files.length > 0) {
+                this.validateAndSetFile(files[0]);
+            }
+        },
+        
+        validateAndSetFile(file) {
+            this.validationResults = [];
+            
+            // Check file size (50MB limit)
+            if (file.size > 52428800) {
+                this.validationResults.push({
+                    type: 'error',
+                    message: 'File size exceeds 50MB limit'
+                });
+                return;
+            }
+            
+            // Check file format
+            const validFormats = ['csv', 'xlsx', 'xls', 'parquet'];
+            const extension = file.name.split('.').pop().toLowerCase();
+            if (!validFormats.includes(extension)) {
+                this.validationResults.push({
+                    type: 'error',
+                    message: 'Unsupported file format. Please use CSV, Excel, or Parquet files.'
+                });
+                return;
+            }
+            
+            this.selectedFile = file;
+            this.validationResults.push({
+                type: 'success',
+                message: 'File validated successfully'
+            });
+        },
+        
+        removeFile() {
+            this.selectedFile = null;
+            this.validationResults = [];
+            this.uploadProgress = 0;
+            document.getElementById('fileInput').value = '';
+        },
+        
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        },
+        
+        async uploadFile() {
+            if (!this.selectedFile) return;
+            
+            this.uploading = true;
+            this.uploadProgress = 0;
+            
+            const formData = new FormData();
+            formData.append('file', this.selectedFile);
+            formData.append('data_type', this.dataType);
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            
+            // Simulate progress (in production, use XMLHttpRequest for real progress)
+            const progressInterval = setInterval(() => {
+                if (this.uploadProgress < 90) {
+                    this.uploadProgress += 10;
+                }
+            }, 200);
+            
+            try {
+                const response = await fetch('/data-ingestion/upload/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    }
+                });
+                
+                clearInterval(progressInterval);
+                this.uploadProgress = 100;
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showToast('File uploaded successfully! Redirecting to column mapping...', 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect_url;
+                    }, 1500);
+                } else {
+                    showToast(data.error || 'Upload failed', 'error');
+                    this.uploading = false;
+                    this.uploadProgress = 0;
+                }
+            } catch (error) {
+                clearInterval(progressInterval);
+                showToast('Upload failed: ' + error.message, 'error');
+                this.uploading = false;
+                this.uploadProgress = 0;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

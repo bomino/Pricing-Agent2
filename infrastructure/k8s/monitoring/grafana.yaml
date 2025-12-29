@@ -1,0 +1,574 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  namespace: pricing-agent-monitoring
+  labels:
+    app: grafana
+    component: monitoring
+data:
+  grafana.ini: |
+    [analytics]
+    check_for_updates = true
+
+    [grafana_net]
+    url = https://grafana.net
+
+    [log]
+    mode = console
+
+    [paths]
+    data = /var/lib/grafana/
+    logs = /var/log/grafana
+    plugins = /var/lib/grafana/plugins
+    provisioning = /etc/grafana/provisioning
+
+    [security]
+    admin_password = admin123  # Change in production
+    allow_embedding = true
+
+    [server]
+    http_port = 3000
+    root_url = https://internal.pricing-agent.yourdomain.com/grafana/
+
+    [auth]
+    disable_login_form = false
+
+    [auth.anonymous]
+    enabled = false
+
+    [smtp]
+    enabled = false
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: pricing-agent-monitoring
+  labels:
+    app: grafana
+    component: monitoring
+data:
+  prometheus.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+        jsonData:
+          timeInterval: 15s
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-config
+  namespace: pricing-agent-monitoring
+  labels:
+    app: grafana
+    component: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-pricing-agent
+  namespace: pricing-agent-monitoring
+  labels:
+    app: grafana
+    component: monitoring
+    dashboard: pricing-agent
+data:
+  pricing-agent-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Pricing Agent - Overview",
+        "tags": ["pricing-agent", "overview"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Service Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "up{job=~\"pricing-.*\"}",
+                "legendFormat": "{{job}}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "mappings": [
+                  {
+                    "options": {
+                      "0": {
+                        "text": "DOWN"
+                      },
+                      "1": {
+                        "text": "UP"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ],
+                "thresholds": {
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{job=\"pricing-django\"}[5m])) by (method)",
+                "legendFormat": "{{method}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 0
+            },
+            "yAxes": [
+              {
+                "label": "Requests/sec",
+                "show": true
+              },
+              {
+                "show": true
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Response Time (95th percentile)",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"pricing-django\"}[5m])) by (le))",
+                "legendFormat": "Django 95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"pricing-fastapi\"}[5m])) by (le))",
+                "legendFormat": "FastAPI 95th percentile"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 8
+            },
+            "yAxes": [
+              {
+                "label": "Seconds",
+                "show": true
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{job=\"pricing-django\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"pricing-django\"}[5m]))",
+                "legendFormat": "Django Error Rate"
+              },
+              {
+                "expr": "sum(rate(http_requests_total{job=\"pricing-fastapi\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"pricing-fastapi\"}[5m]))",
+                "legendFormat": "FastAPI Error Rate"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 8
+            },
+            "yAxes": [
+              {
+                "label": "Percentage",
+                "max": 1,
+                "min": 0,
+                "show": true
+              }
+            ]
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "timepicker": {},
+        "templating": {
+          "list": []
+        },
+        "version": 0
+      }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: pricing-agent-monitoring
+  labels:
+    app: grafana
+    component: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      serviceAccountName: grafana
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 472
+        fsGroup: 472
+      containers:
+      - name: grafana
+        image: grafana/grafana:10.1.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secrets
+              key: admin_password
+        - name: GF_INSTALL_PLUGINS
+          value: "grafana-piechart-panel,grafana-worldmap-panel,grafana-clock-panel"
+        volumeMounts:
+        - name: grafana-config
+          mountPath: /etc/grafana/grafana.ini
+          subPath: grafana.ini
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+        - name: grafana-dashboards-config
+          mountPath: /etc/grafana/provisioning/dashboards
+        - name: grafana-dashboards
+          mountPath: /var/lib/grafana/dashboards
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          timeoutSeconds: 10
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+      volumes:
+      - name: grafana-config
+        configMap:
+          name: grafana-config
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-storage-pvc
+      - name: grafana-datasources
+        configMap:
+          name: grafana-datasources
+      - name: grafana-dashboards-config
+        configMap:
+          name: grafana-dashboards-config
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboard-pricing-agent
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: pricing-agent-monitoring
+  labels:
+    app: grafana
+    component: monitoring
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3000
+    targetPort: 3000
+    name: http
+  selector:
+    app: grafana
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana
+  namespace: pricing-agent-monitoring
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-storage-pvc
+  namespace: pricing-agent-monitoring
+  labels:
+    app: grafana
+    component: monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secrets
+  namespace: pricing-agent-monitoring
+  labels:
+    app: grafana
+    component: monitoring
+type: Opaque
+data:
+  # Base64 encoded "admin123" - Change this in production!
+  admin_password: YWRtaW4xMjM=
+
+---
+# Additional ConfigMap for ML-specific dashboard
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-ml
+  namespace: pricing-agent-monitoring
+  labels:
+    app: grafana
+    component: monitoring
+    dashboard: ml-service
+data:
+  ml-service-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "ML Service - Performance",
+        "tags": ["pricing-agent", "ml", "fastapi"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "ML Predictions per Second",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(ml_predictions_total[5m])) by (model)",
+                "legendFormat": "{{model}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "ML Prediction Latency",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(ml_prediction_duration_seconds_bucket[5m])) by (le, model))",
+                "legendFormat": "{{model}} - 95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.50, sum(rate(ml_prediction_duration_seconds_bucket[5m])) by (le, model))",
+                "legendFormat": "{{model}} - 50th percentile"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "Model Accuracy",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "ml_model_accuracy",
+                "legendFormat": "{{model}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 8
+            }
+          },
+          {
+            "id": 4,
+            "title": "Model Errors",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(ml_predictions_total{status=\"error\"}[5m])) by (model)",
+                "legendFormat": "{{model}} errors"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 8
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "version": 0
+      }
+    }
+
+---
+# Infrastructure dashboard
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-infrastructure
+  namespace: pricing-agent-monitoring
+  labels:
+    app: grafana
+    component: monitoring
+    dashboard: infrastructure
+data:
+  infrastructure-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Infrastructure - Resources",
+        "tags": ["pricing-agent", "infrastructure", "kubernetes"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"pricing-agent\"}[5m])) by (pod)",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "sum(container_memory_usage_bytes{namespace=\"pricing-agent\"}) by (pod) / 1024 / 1024",
+                "legendFormat": "{{pod}}"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "Pod Status",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "kube_pod_status_phase{namespace=\"pricing-agent\"}",
+                "format": "table"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 8
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "version": 0
+      }
+    }

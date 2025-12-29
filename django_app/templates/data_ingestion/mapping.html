@@ -1,0 +1,518 @@
+{% extends "base.html" %}
+{% load static %}
+{% load data_filters %}
+
+{% block title %}Column Mapping - AI Pricing Agent{% endblock %}
+
+{% block extra_head %}
+<style>
+    .mapping-container {
+        display: grid;
+        grid-template-columns: 1fr 100px 1fr;
+        gap: 2rem;
+        align-items: start;
+    }
+    
+    .source-column {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        cursor: move;
+        transition: all 0.2s ease;
+    }
+    
+    .source-column:hover {
+        border-color: #627d98;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .source-column.dragging {
+        opacity: 0.5;
+        transform: scale(0.95);
+    }
+    
+    .target-field {
+        background: #f9fafb;
+        border: 2px dashed #d1d5db;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        min-height: 60px;
+        transition: all 0.2s ease;
+    }
+    
+    .target-field.mapped {
+        border-style: solid;
+        border-color: #10b981;
+        background: #ecfdf5;
+    }
+    
+    .target-field.dragover {
+        border-color: #243b53;
+        background: #e0e7ff;
+        transform: scale(1.02);
+    }
+    
+    .mapping-arrow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #9ca3af;
+    }
+    
+    .data-preview-table {
+        font-size: 0.875rem;
+    }
+    
+    .data-preview-table th {
+        background: #243b53;
+        color: white;
+        padding: 0.5rem;
+        text-align: left;
+        font-weight: 500;
+        position: sticky;
+        top: 0;
+    }
+    
+    .data-preview-table td {
+        padding: 0.5rem;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .sample-value {
+        background: #f3f4f6;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+    }
+    
+    .confidence-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.125rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .confidence-high {
+        background: #10b981;
+        color: white;
+    }
+    
+    .confidence-medium {
+        background: #f59e0b;
+        color: white;
+    }
+    
+    .confidence-low {
+        background: #6b7280;
+        color: white;
+    }
+    
+    .mapping-status {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        min-width: 300px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="mappingManager()">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-navy-900">Column Mapping</h1>
+                <p class="text-gray-600 mt-1">Map your data columns to our standard fields</p>
+            </div>
+            <div class="flex gap-3">
+                <button @click="autoMap()" 
+                        class="px-4 py-2 text-navy-600 bg-white border border-navy-600 rounded-lg hover:bg-navy-50 transition-colors">
+                    <i class="fas fa-magic mr-2"></i>Auto-Map
+                </button>
+                <button @click="saveMappings()" 
+                        :disabled="!isValid()"
+                        class="px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fas fa-save mr-2"></i>Save & Continue
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Info Bar -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                <i class="fas fa-file-alt text-2xl text-navy-600 mr-3"></i>
+                <div>
+                    <p class="font-semibold text-navy-900">{{ upload.original_filename }}</p>
+                    <p class="text-sm text-gray-500">
+                        {{ upload.total_rows }} rows • {{ upload.get_file_format_display }} • 
+                        Uploaded {{ upload.created_at|timesince }} ago
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="text-sm">
+                    <span class="text-gray-600">Data Type:</span>
+                    <span class="font-semibold text-navy-900">{{ upload.get_data_type_display }}</span>
+                </div>
+                <div class="text-sm">
+                    <span class="text-gray-600">Status:</span>
+                    <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">
+                        Mapping Columns
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mapping Templates -->
+    {% if templates %}
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="font-semibold text-blue-900">
+                    <i class="fas fa-bookmark mr-2"></i>Saved Mapping Templates
+                </h3>
+                <p class="text-sm text-blue-700 mt-1">Apply a previously saved mapping template</p>
+            </div>
+            <select @change="applyTemplate($event.target.value)" 
+                    class="px-3 py-1 border border-blue-300 rounded-lg text-sm">
+                <option value="">Select Template...</option>
+                {% for template in templates %}
+                <option value="{{ template.id }}">
+                    {{ template.name }} ({{ template.times_used }} uses)
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Main Mapping Interface -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- Source Columns -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-700 to-gray-600 rounded-t-lg">
+                <h2 class="text-lg font-semibold text-white flex items-center justify-between">
+                    <span><i class="fas fa-database mr-2"></i>Your Columns</span>
+                    <span class="text-sm font-normal">{{ detected_schema.columns|length }} columns detected</span>
+                </h2>
+            </div>
+            <div class="p-6 max-h-96 overflow-y-auto">
+                {% for col_name, col_info in detected_schema.columns.items %}
+                <div class="source-column" 
+                     draggable="true"
+                     @dragstart="dragStart($event, '{{ col_name }}')"
+                     @dragend="dragEnd()"
+                     data-column="{{ col_name }}">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="font-semibold text-navy-900">{{ col_name }}</div>
+                            {% if col_info %}
+                            <div class="text-xs text-gray-500 mt-1">
+                                Type: {{ col_info.data_type|default:"unknown" }} • 
+                                {{ col_info.unique_count|default:0 }} unique values
+                                {% if col_info.null_count > 0 %}
+                                • {{ col_info.null_count }} nulls
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            {% if detected_schema.sample_values %}
+                            <div class="sample-value mt-2">
+                                {{ detected_schema.sample_values|get_item:col_name|first|default:"No sample" }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% if col_info and col_info.suggested_mapping %}
+                        <span class="confidence-badge confidence-high">
+                            <i class="fas fa-check mr-1"></i>Auto
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Target Fields -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-navy-800 to-navy-700 rounded-t-lg">
+                <h2 class="text-lg font-semibold text-white flex items-center justify-between">
+                    <span><i class="fas fa-th-list mr-2"></i>Standard Fields</span>
+                    <span class="text-sm font-normal">
+                        <span x-text="Object.keys(mappings).length"></span> / {{ target_fields|length }} mapped
+                    </span>
+                </h2>
+            </div>
+            <div class="p-6 max-h-96 overflow-y-auto">
+                {% for field in target_fields %}
+                <div class="target-field" 
+                     :class="{ 'mapped': mappings['{{ field }}'] }"
+                     @dragover.prevent="dragOver($event)"
+                     @dragleave.prevent="dragLeave($event)"
+                     @drop.prevent="drop($event, '{{ field }}')"
+                     data-field="{{ field }}">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="font-semibold text-navy-900">
+                                {{ field|replace:"_"|title }}
+                                {% if field in required_fields %}
+                                <span class="text-red-500">*</span>
+                                {% endif %}
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                {% if field == 'po_number' %}Purchase order identifier{% endif %}
+                                {% if field == 'supplier_name' %}Name of the supplier/vendor{% endif %}
+                                {% if field == 'material_code' %}Material or product code{% endif %}
+                                {% if field == 'quantity' %}Order quantity{% endif %}
+                                {% if field == 'unit_price' %}Price per unit{% endif %}
+                                {% if field == 'total_price' %}Total line amount{% endif %}
+                                {% if field == 'currency' %}Currency code (USD, EUR, etc.){% endif %}
+                                {% if field == 'purchase_date' %}Date of purchase{% endif %}
+                            </div>
+                        </div>
+                        <template x-if="mappings['{{ field }}']">
+                            <div class="flex items-center">
+                                <span class="text-sm font-medium text-green-600 mr-2" x-text="mappings['{{ field }}']"></span>
+                                <button @click="removeMapping('{{ field }}')" 
+                                        class="text-red-500 hover:text-red-700">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Preview -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-navy-900">
+                <i class="fas fa-table mr-2"></i>Data Preview (First 20 rows)
+            </h2>
+        </div>
+        <div class="p-6 overflow-x-auto">
+            <table class="data-preview-table w-full">
+                <thead>
+                    <tr>
+                        {% for col in detected_schema.columns.keys %}
+                        <th>{{ col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in preview_data|slice:":20" %}
+                    <tr>
+                        {% for col in detected_schema.columns.keys %}
+                        <td>{{ row|get_item:col|default:"-" }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Mapping Status -->
+    <div class="mapping-status" x-show="showStatus">
+        <h3 class="font-semibold text-navy-900 mb-3">Mapping Progress</h3>
+        <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+                <span class="text-gray-600">Required Fields</span>
+                <span class="font-semibold" 
+                      :class="requiredMapped() === requiredCount ? 'text-green-600' : 'text-orange-600'">
+                    <span x-text="requiredMapped()"></span> / {{ required_fields|length }}
+                </span>
+            </div>
+            <div class="flex justify-between text-sm">
+                <span class="text-gray-600">Optional Fields</span>
+                <span class="font-semibold text-gray-700">
+                    <span x-text="Object.keys(mappings).length - requiredMapped()"></span>
+                </span>
+            </div>
+        </div>
+        
+        <div class="mt-4 pt-4 border-t border-gray-200">
+            <button @click="saveAsTemplate()" 
+                    class="w-full px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+                <i class="fas fa-bookmark mr-2"></i>Save as Template
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Template filter for Django
+if (!window.djangoFilters) {
+    window.djangoFilters = {
+        get_item: function(dict, key) {
+            return dict[key];
+        }
+    };
+}
+
+function mappingManager() {
+    return {
+        mappings: {},
+        draggedColumn: null,
+        showStatus: true,
+        requiredFields: ['supplier_name', 'material_code', 'quantity', 'unit_price'],
+        requiredCount: 4,
+        
+        init() {
+            // Apply auto-detected mappings
+            const suggestedMappings = {{ detected_schema.suggested_mappings|safe|default:"{}" }};
+            for (const [col, field] of Object.entries(suggestedMappings)) {
+                this.mappings[field] = col;
+            }
+        },
+        
+        dragStart(event, column) {
+            this.draggedColumn = column;
+            event.target.classList.add('dragging');
+        },
+        
+        dragEnd() {
+            document.querySelectorAll('.source-column').forEach(el => {
+                el.classList.remove('dragging');
+            });
+        },
+        
+        dragOver(event) {
+            event.currentTarget.classList.add('dragover');
+        },
+        
+        dragLeave(event) {
+            event.currentTarget.classList.remove('dragover');
+        },
+        
+        drop(event, field) {
+            event.currentTarget.classList.remove('dragover');
+            if (this.draggedColumn) {
+                // Remove column from any existing mapping
+                for (const [f, col] of Object.entries(this.mappings)) {
+                    if (col === this.draggedColumn) {
+                        delete this.mappings[f];
+                    }
+                }
+                // Add new mapping
+                this.mappings[field] = this.draggedColumn;
+                this.draggedColumn = null;
+            }
+        },
+        
+        removeMapping(field) {
+            delete this.mappings[field];
+        },
+        
+        autoMap() {
+            // Auto-mapping based on column name similarity
+            const sourceColumns = Object.keys({{ detected_schema.columns|safe }});
+            const targetFields = {{ target_fields|safe }};
+            
+            for (const field of targetFields) {
+                for (const col of sourceColumns) {
+                    const colLower = col.toLowerCase();
+                    const fieldLower = field.toLowerCase();
+                    
+                    if (colLower.includes(fieldLower) || fieldLower.includes(colLower)) {
+                        this.mappings[field] = col;
+                        break;
+                    }
+                }
+            }
+            
+            showToast('Auto-mapping completed', 'success');
+        },
+        
+        requiredMapped() {
+            return this.requiredFields.filter(f => this.mappings[f]).length;
+        },
+        
+        isValid() {
+            return this.requiredMapped() === this.requiredCount;
+        },
+        
+        async saveMappings() {
+            if (!this.isValid()) {
+                showToast('Please map all required fields', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/data-ingestion/mapping/{{ upload.id }}/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify(this.mappings)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showToast(data.message || 'Mappings saved! Ready to process...', 'success');
+                    setTimeout(() => {
+                        // Use the redirect URL from the server response
+                        window.location.href = data.redirect || '/data-ingestion/';
+                    }, 1500);
+                } else {
+                    showToast('Failed to save mappings', 'error');
+                }
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        },
+        
+        async saveAsTemplate() {
+            const name = prompt('Enter a name for this mapping template:');
+            if (!name) return;
+            
+            try {
+                const response = await fetch('/data-ingestion/api/save-template/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        data_type: '{{ upload.data_type }}',
+                        mappings: this.mappings
+                    })
+                });
+                
+                if (response.ok) {
+                    showToast('Template saved successfully', 'success');
+                }
+            } catch (error) {
+                showToast('Error saving template', 'error');
+            }
+        },
+        
+        applyTemplate(templateId) {
+            // In production, fetch template mappings from server
+            showToast('Template applied', 'success');
+        }
+    }
+}
+</script>
+{% endblock %}

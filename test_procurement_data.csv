@@ -1,0 +1,6 @@
+po_number,supplier_name,supplier_code,material_code,material_description,quantity,unit_price,total_price,currency,purchase_date,delivery_date
+PO-2024-001,ABC Suppliers Inc,SUP001,MAT001,Steel Beam 10x10,100,45.50,4550.00,USD,2024-01-15,2024-02-01
+PO-2024-002,XYZ Manufacturing,SUP002,MAT002,Aluminum Sheet 4x8,50,125.00,6250.00,USD,2024-01-16,2024-02-05
+PO-2024-003,ABC Suppliers Inc,SUP001,MAT003,Copper Wire 12AWG,200,8.75,1750.00,USD,2024-01-17,2024-02-03
+PO-2024-004,Global Materials Co,SUP003,MAT001,Steel Beam 10x10,75,44.00,3300.00,USD,2024-01-18,2024-02-10
+PO-2024-005,XYZ Manufacturing,SUP002,MAT004,Plastic Resin Type A,500,2.25,1125.00,USD,2024-01-19,2024-02-07

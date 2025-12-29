@@ -1,0 +1,589 @@
+[
+  {
+    "model": "core.organization",
+    "pk": 1,
+    "fields": {
+      "name": "ACME Manufacturing Corp",
+      "slug": "acme-manufacturing",
+      "is_active": true,
+      "description": "Leading manufacturer of industrial components and machinery parts",
+      "website": "https://acme-manufacturing.com",
+      "contact_email": "info@acme-manufacturing.com",
+      "contact_phone": "+1-555-123-4567",
+      "address": "123 Industrial Blvd, Manufacturing City, MC 12345",
+      "settings": {
+        "default_currency": "USD",
+        "timezone": "America/New_York",
+        "business_type": "manufacturing",
+        "fiscal_year_start": "01-01",
+        "approval_workflow": {
+          "rfq_approval_limit": 50000,
+          "quote_approval_limit": 100000,
+          "auto_approve_trusted_suppliers": true
+        }
+      },
+      "created_at": "2023-01-15T10:00:00Z",
+      "updated_at": "2024-01-15T10:00:00Z"
+    }
+  },
+  {
+    "model": "core.organization",
+    "pk": 2,
+    "fields": {
+      "name": "Global Construction Supplies",
+      "slug": "global-construction",
+      "is_active": true,
+      "description": "International supplier of construction materials and equipment",
+      "website": "https://global-construction.com",
+      "contact_email": "procurement@global-construction.com",
+      "contact_phone": "+1-555-987-6543",
+      "address": "456 Construction Ave, Builder City, BC 67890",
+      "settings": {
+        "default_currency": "USD",
+        "timezone": "America/Chicago",
+        "business_type": "construction",
+        "fiscal_year_start": "04-01",
+        "approval_workflow": {
+          "rfq_approval_limit": 25000,
+          "quote_approval_limit": 75000,
+          "auto_approve_trusted_suppliers": false
+        }
+      },
+      "created_at": "2023-03-20T14:30:00Z",
+      "updated_at": "2024-02-10T16:45:00Z"
+    }
+  },
+  {
+    "model": "core.category",
+    "pk": 1,
+    "fields": {
+      "name": "Steel Products",
+      "slug": "steel-products",
+      "description": "All steel-based materials and components",
+      "organization": 1,
+      "parent": null,
+      "is_active": true,
+      "sort_order": 1,
+      "metadata": {
+        "color": "#FF6B35",
+        "icon": "steel-icon",
+        "typical_lead_time_days": 14,
+        "quality_standards": ["ASTM", "ISO", "ANSI"]
+      },
+      "created_at": "2023-01-16T09:00:00Z"
+    }
+  },
+  {
+    "model": "core.category",
+    "pk": 2,
+    "fields": {
+      "name": "Steel Plates",
+      "slug": "steel-plates",
+      "description": "Flat steel plates in various grades and thicknesses",
+      "organization": 1,
+      "parent": 1,
+      "is_active": true,
+      "sort_order": 1,
+      "metadata": {
+        "color": "#FF6B35",
+        "icon": "plate-icon",
+        "typical_lead_time_days": 10,
+        "common_grades": ["A36", "A572", "A514"]
+      },
+      "created_at": "2023-01-16T09:15:00Z"
+    }
+  },
+  {
+    "model": "core.category",
+    "pk": 3,
+    "fields": {
+      "name": "Electronic Components",
+      "slug": "electronic-components",
+      "description": "Electronic parts and components for industrial applications",
+      "organization": 1,
+      "parent": null,
+      "is_active": true,
+      "sort_order": 2,
+      "metadata": {
+        "color": "#4ECDC4",
+        "icon": "electronics-icon",
+        "typical_lead_time_days": 21,
+        "esd_sensitive": true,
+        "quality_standards": ["IPC", "RoHS", "REACH"]
+      },
+      "created_at": "2023-01-16T10:30:00Z"
+    }
+  },
+  {
+    "model": "accounts.user",
+    "pk": 1,
+    "fields": {
+      "username": "john.buyer",
+      "email": "john.buyer@acme-manufacturing.com",
+      "first_name": "John",
+      "last_name": "Buyer",
+      "is_active": true,
+      "is_staff": false,
+      "is_superuser": false,
+      "organization": 1,
+      "profile_data": {
+        "department": "Procurement",
+        "job_title": "Senior Buyer",
+        "phone": "+1-555-123-4568",
+        "employee_id": "EMP001",
+        "cost_center": "PROC-001",
+        "approval_limit": 25000,
+        "preferred_suppliers": [1, 3, 5],
+        "notification_preferences": {
+          "email": true,
+          "sms": false,
+          "push": true
+        }
+      },
+      "date_joined": "2023-01-16T08:00:00Z"
+    }
+  },
+  {
+    "model": "accounts.user",
+    "pk": 2,
+    "fields": {
+      "username": "sarah.admin",
+      "email": "sarah.admin@acme-manufacturing.com",
+      "first_name": "Sarah",
+      "last_name": "Administrator",
+      "is_active": true,
+      "is_staff": true,
+      "is_superuser": true,
+      "organization": 1,
+      "profile_data": {
+        "department": "IT",
+        "job_title": "System Administrator",
+        "phone": "+1-555-123-4569",
+        "employee_id": "EMP002",
+        "cost_center": "IT-001",
+        "approval_limit": 100000,
+        "notification_preferences": {
+          "email": true,
+          "sms": true,
+          "push": true
+        }
+      },
+      "date_joined": "2023-01-15T08:00:00Z"
+    }
+  },
+  {
+    "model": "pricing.material",
+    "pk": 1,
+    "fields": {
+      "organization": 1,
+      "code": "STL001",
+      "name": "Steel Plate A36 - 10mm",
+      "description": "High quality A36 steel plate, 10mm thickness, suitable for structural applications",
+      "material_type": "raw_material",
+      "category": 2,
+      "unit_of_measure": "kg",
+      "weight": "78.5",
+      "weight_unit": "kg",
+      "dimensions": {
+        "length": 2000,
+        "width": 1000,
+        "height": 10,
+        "unit": "mm"
+      },
+      "specifications": {
+        "grade": "A36",
+        "finish": "hot_rolled",
+        "thickness": "10mm",
+        "surface_treatment": "pickled_oiled",
+        "tensile_strength": "400-550 MPa",
+        "yield_strength": "250 MPa min"
+      },
+      "attributes": {
+        "weldable": true,
+        "corrosion_resistant": false,
+        "heat_treatable": true,
+        "magnetic": true,
+        "color": "dark_gray"
+      },
+      "status": "active",
+      "lifecycle_stage": "production",
+      "list_price": "1250.00",
+      "cost_price": "875.00",
+      "currency": "USD",
+      "lead_time_days": 14,
+      "minimum_order_quantity": "100.00",
+      "certifications": ["ISO9001", "ASTM A36", "CE"],
+      "compliance_standards": ["OSHA", "EPA", "REACH"],
+      "search_keywords": "steel plate A36 structural metal hot rolled",
+      "created_at": "2023-01-17T10:00:00Z",
+      "updated_at": "2024-01-10T15:30:00Z"
+    }
+  },
+  {
+    "model": "pricing.material",
+    "pk": 2,
+    "fields": {
+      "organization": 1,
+      "code": "ELC001",
+      "name": "Microcontroller ARM Cortex-M4",
+      "description": "32-bit ARM Cortex-M4 microcontroller with FPU, 256KB Flash, 64KB RAM",
+      "material_type": "component",
+      "category": 3,
+      "unit_of_measure": "pieces",
+      "weight": "0.01",
+      "weight_unit": "kg",
+      "dimensions": {
+        "length": 10,
+        "width": 10,
+        "height": 1.2,
+        "unit": "mm"
+      },
+      "specifications": {
+        "architecture": "ARM Cortex-M4",
+        "frequency": "168MHz",
+        "flash_memory": "256KB",
+        "ram": "64KB",
+        "gpio_pins": 82,
+        "package": "LQFP100",
+        "operating_voltage": "1.8V-3.6V",
+        "temperature_range": "-40°C to +85°C"
+      },
+      "attributes": {
+        "lead_free": true,
+        "rohs_compliant": true,
+        "esd_sensitive": true,
+        "moisture_sensitive": true,
+        "programmable": true
+      },
+      "status": "active",
+      "lifecycle_stage": "mature",
+      "list_price": "12.50",
+      "cost_price": "8.75",
+      "currency": "USD",
+      "lead_time_days": 21,
+      "minimum_order_quantity": "10.00",
+      "certifications": ["CE", "FCC", "RoHS"],
+      "compliance_standards": ["IPC-A-610", "JEDEC", "AEC-Q100"],
+      "search_keywords": "microcontroller ARM cortex M4 32bit embedded processor",
+      "created_at": "2023-02-15T14:20:00Z",
+      "updated_at": "2024-01-05T11:15:00Z"
+    }
+  },
+  {
+    "model": "pricing.material",
+    "pk": 3,
+    "fields": {
+      "organization": 2,
+      "code": "CON001",
+      "name": "Portland Cement Type I",
+      "description": "High quality Portland cement suitable for general construction applications",
+      "material_type": "raw_material",
+      "category": null,
+      "unit_of_measure": "kg",
+      "weight": "1.0",
+      "weight_unit": "kg",
+      "dimensions": null,
+      "specifications": {
+        "type": "Type I",
+        "strength_class": "42.5N",
+        "fineness": "3200 cm²/g",
+        "setting_time": "45-375 min",
+        "compressive_strength_28d": "42.5 MPa"
+      },
+      "attributes": {
+        "color": "gray",
+        "waterproof": false,
+        "fire_resistant": true,
+        "shrinkage": "low"
+      },
+      "status": "active",
+      "lifecycle_stage": "production",
+      "list_price": "0.45",
+      "cost_price": "0.32",
+      "currency": "USD",
+      "lead_time_days": 7,
+      "minimum_order_quantity": "1000.00",
+      "certifications": ["ASTM C150", "EN 197-1"],
+      "compliance_standards": ["OSHA", "EPA"],
+      "search_keywords": "portland cement construction building material concrete",
+      "created_at": "2023-03-21T09:30:00Z",
+      "updated_at": "2024-01-20T13:45:00Z"
+    }
+  },
+  {
+    "model": "procurement.supplier",
+    "pk": 1,
+    "fields": {
+      "organization": 1,
+      "name": "Superior Steel Supply Co.",
+      "code": "SUP001",
+      "email": "orders@superiorsteel.com",
+      "phone": "+1-555-444-3333",
+      "website": "https://superiorsteel.com",
+      "address": "789 Steel Mill Rd, Steel City, SC 54321",
+      "contact_person": "Mike Johnson",
+      "status": "active",
+      "supplier_type": "manufacturer",
+      "rating": 4.5,
+      "categories": [1, 2],
+      "certifications": ["ISO9001", "ISO14001", "OHSAS18001"],
+      "payment_terms": "NET30",
+      "shipping_terms": "FOB Origin",
+      "metadata": {
+        "established_year": 1995,
+        "employee_count": 250,
+        "annual_revenue": 50000000,
+        "quality_score": 4.8,
+        "delivery_score": 4.2,
+        "preferred_supplier": true,
+        "contract_expiry": "2024-12-31"
+      },
+      "created_at": "2023-01-18T11:00:00Z",
+      "updated_at": "2024-01-15T09:20:00Z"
+    }
+  },
+  {
+    "model": "procurement.supplier",
+    "pk": 2,
+    "fields": {
+      "organization": 1,
+      "name": "TechCorp Electronics Ltd.",
+      "code": "SUP002",
+      "email": "procurement@techcorp.com",
+      "phone": "+1-555-777-8888",
+      "website": "https://techcorp-electronics.com",
+      "address": "456 Technology Park, Silicon Valley, SV 98765",
+      "contact_person": "Lisa Chen",
+      "status": "active",
+      "supplier_type": "distributor",
+      "rating": 4.2,
+      "categories": [3],
+      "certifications": ["ISO9001", "ISO27001", "RoHS"],
+      "payment_terms": "NET45",
+      "shipping_terms": "FOB Destination",
+      "metadata": {
+        "established_year": 2008,
+        "employee_count": 120,
+        "annual_revenue": 25000000,
+        "quality_score": 4.3,
+        "delivery_score": 4.5,
+        "preferred_supplier": false,
+        "specializes_in": ["microcontrollers", "sensors", "passive_components"]
+      },
+      "created_at": "2023-02-20T13:15:00Z",
+      "updated_at": "2024-01-08T16:30:00Z"
+    }
+  },
+  {
+    "model": "pricing.price",
+    "pk": 1,
+    "fields": {
+      "time": "2024-01-15T10:00:00Z",
+      "material": 1,
+      "supplier": 1,
+      "organization": 1,
+      "price": "1200.00",
+      "currency": "USD",
+      "quantity": "100.00",
+      "unit_of_measure": "kg",
+      "price_type": "quote",
+      "valid_from": "2024-01-15",
+      "valid_to": "2024-02-15",
+      "source": "Superior Steel Supply Co.",
+      "confidence_score": "0.9500",
+      "metadata": {
+        "quote_id": "QUO-2024-001",
+        "negotiated": true,
+        "volume_discount": 0.05,
+        "payment_terms": "NET30",
+        "delivery_terms": "FOB Origin",
+        "sales_rep": "Mike Johnson"
+      },
+      "created_by": 1
+    }
+  },
+  {
+    "model": "pricing.price",
+    "pk": 2,
+    "fields": {
+      "time": "2024-01-16T14:30:00Z",
+      "material": 1,
+      "supplier": null,
+      "organization": 1,
+      "price": "1250.00",
+      "currency": "USD",
+      "quantity": "100.00",
+      "unit_of_measure": "kg",
+      "price_type": "market",
+      "valid_from": null,
+      "valid_to": null,
+      "source": "Steel Market Index",
+      "confidence_score": "0.8500",
+      "metadata": {
+        "market_trend": "stable",
+        "regional_factor": 1.02,
+        "supply_demand_ratio": 0.95,
+        "commodity_index": "SMI-Steel-A36"
+      },
+      "created_by": null
+    }
+  },
+  {
+    "model": "pricing.price",
+    "pk": 3,
+    "fields": {
+      "time": "2024-01-17T09:15:00Z",
+      "material": 2,
+      "supplier": 2,
+      "organization": 1,
+      "price": "11.75",
+      "currency": "USD",
+      "quantity": "100.00",
+      "unit_of_measure": "pieces",
+      "price_type": "quote",
+      "valid_from": "2024-01-17",
+      "valid_to": "2024-03-17",
+      "source": "TechCorp Electronics Ltd.",
+      "confidence_score": "0.9200",
+      "metadata": {
+        "quote_id": "TC-Q-2024-0042",
+        "bulk_pricing": true,
+        "tier_1_price": 11.75,
+        "tier_2_price": 11.25,
+        "tier_3_price": 10.95,
+        "minimum_order": 10
+      },
+      "created_by": 1
+    }
+  },
+  {
+    "model": "pricing.price",
+    "pk": 4,
+    "fields": {
+      "time": "2024-01-18T11:45:00Z",
+      "material": 2,
+      "supplier": null,
+      "organization": 1,
+      "price": "12.15",
+      "currency": "USD",
+      "quantity": "100.00",
+      "unit_of_measure": "pieces",
+      "price_type": "predicted",
+      "valid_from": null,
+      "valid_to": null,
+      "source": "ML Prediction Service",
+      "confidence_score": "0.7800",
+      "metadata": {
+        "model_version": "v2.1.0",
+        "prediction_timestamp": "2024-01-18T11:45:00Z",
+        "feature_importance": {
+          "historical_price": 0.35,
+          "market_conditions": 0.25,
+          "supplier_tier": 0.15,
+          "volume": 0.15,
+          "lead_time": 0.10
+        },
+        "confidence_interval": {
+          "lower": 11.50,
+          "upper": 12.80
+        }
+      },
+      "created_by": null
+    }
+  },
+  {
+    "model": "pricing.pricebenchmark",
+    "pk": 1,
+    "fields": {
+      "material": 1,
+      "organization": 1,
+      "benchmark_type": "market_average",
+      "benchmark_price": "1225.00",
+      "currency": "USD",
+      "quantity": "100.00",
+      "period_start": "2024-01-01",
+      "period_end": "2024-01-31",
+      "sample_size": 25,
+      "min_price": "1180.00",
+      "max_price": "1280.00",
+      "std_deviation": "28.50",
+      "calculation_method": "Weighted average of supplier quotes and market data",
+      "data_sources": ["supplier_quotes", "market_data", "industry_reports"],
+      "confidence_level": "0.9500",
+      "created_at": "2024-02-01T08:00:00Z",
+      "updated_at": "2024-02-01T08:00:00Z"
+    }
+  },
+  {
+    "model": "pricing.pricealert",
+    "pk": 1,
+    "fields": {
+      "user": 1,
+      "material": 1,
+      "organization": 1,
+      "name": "Steel Price Above $1300",
+      "alert_type": "threshold",
+      "condition_type": "above",
+      "threshold_value": "1300.00",
+      "status": "active",
+      "last_triggered": null,
+      "trigger_count": 0,
+      "email_notification": true,
+      "push_notification": true,
+      "created_at": "2024-01-20T10:00:00Z",
+      "updated_at": "2024-01-20T10:00:00Z"
+    }
+  },
+  {
+    "model": "pricing.costmodel",
+    "pk": 1,
+    "fields": {
+      "material": 1,
+      "organization": 1,
+      "name": "Steel Plate Should-Cost Model",
+      "model_type": "parametric",
+      "version": "1.0",
+      "parameters": {
+        "base_material_cost": 800.0,
+        "processing_cost_per_kg": 2.5,
+        "transportation_cost": 50.0,
+        "supplier_margin": 0.15,
+        "market_adjustment": 1.05
+      },
+      "cost_drivers": [
+        {
+          "name": "raw_material_cost",
+          "weight": 0.65,
+          "type": "variable",
+          "calculation": "base_cost * weight * market_factor"
+        },
+        {
+          "name": "processing_cost",
+          "weight": 0.20,
+          "type": "variable", 
+          "calculation": "processing_rate * weight"
+        },
+        {
+          "name": "logistics_cost",
+          "weight": 0.10,
+          "type": "semi_variable",
+          "calculation": "base_shipping + (weight * shipping_rate)"
+        },
+        {
+          "name": "overhead_markup",
+          "weight": 0.05,
+          "type": "percentage",
+          "calculation": "total_direct_costs * overhead_rate"
+        }
+      ],
+      "accuracy_score": "0.8750",
+      "r_squared": "0.8200",
+      "mean_absolute_error": "45.50",
+      "is_active": true,
+      "last_trained": "2024-01-10T14:30:00Z",
+      "training_data_count": 1250,
+      "created_at": "2024-01-15T16:00:00Z",
+      "updated_at": "2024-01-15T16:00:00Z"
+    }
+  }
+]

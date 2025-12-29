@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Map Columns - {{ upload.original_filename }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto p-6">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">Map Your Columns</h1>
+        <p class="text-gray-600 mt-1">
+            <span class="font-medium">{{ upload.original_filename }}</span> • 
+            {{ upload.total_rows }} rows • 
+            {{ columns|length }} columns detected
+        </p>
+    </div>
+
+    <!-- Status Messages -->
+    <div id="status-message" class="hidden mb-4 p-4 rounded-lg"></div>
+
+    <!-- Simple Mapping Form -->
+    <form id="mapping-form" method="POST" class="space-y-6">
+        {% csrf_token %}
+        
+        <!-- Required Fields Section -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <span class="text-red-500">*</span> Required Fields
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for field in target_fields %}
+                    {% if field.required %}
+                    <div class="flex flex-col">
+                        <label class="text-sm font-medium text-gray-700 mb-1">
+                            {{ field.label }}
+                            <span class="text-red-500">*</span>
+                        </label>
+                        <select name="mapping_{{ field.name }}" 
+                                id="field_{{ field.name }}"
+                                class="mapping-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                required>
+                            <option value="">-- Select Column --</option>
+                            {% for col in columns %}
+                            <option value="{{ col }}" 
+                                    {% if col in suggested_mappings and suggested_mappings|get_item:col == field.name %}selected{% endif %}>
+                                {{ col }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Optional Fields Section -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Optional Fields</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {% for field in target_fields %}
+                    {% if not field.required %}
+                    <div class="flex flex-col">
+                        <label class="text-sm font-medium text-gray-700 mb-1">
+                            {{ field.label }}
+                        </label>
+                        <select name="mapping_{{ field.name }}" 
+                                id="field_{{ field.name }}"
+                                class="mapping-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400">
+                            <option value="">-- Select Column (Optional) --</option>
+                            {% for col in columns %}
+                            <option value="{{ col }}"
+                                    {% if col in suggested_mappings and suggested_mappings|get_item:col == field.name %}selected{% endif %}>
+                                {{ col }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex justify-between items-center">
+            <div>
+                <button type="button" 
+                        onclick="autoMap()"
+                        class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">
+                    <i class="fas fa-magic mr-2"></i>Auto-Detect
+                </button>
+                <button type="button" 
+                        onclick="clearAll()"
+                        class="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 ml-2">
+                    <i class="fas fa-times mr-2"></i>Clear All
+                </button>
+            </div>
+            
+            <div>
+                <a href="/data-ingestion/" 
+                   class="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                    Cancel
+                </a>
+                <button type="submit" 
+                        id="save-btn"
+                        class="ml-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span id="save-text">Save & Process</span>
+                    <span id="save-loading" class="hidden">
+                        <i class="fas fa-spinner fa-spin mr-2"></i>Processing...
+                    </span>
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+// CSRF token setup for AJAX
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Auto-map columns based on name similarity
+function autoMap() {
+    const selects = document.querySelectorAll('.mapping-select');
+    const columns = {{ columns|safe }};
+    
+    selects.forEach(select => {
+        const fieldName = select.id.replace('field_', '').toLowerCase();
+        
+        // Find best matching column
+        let bestMatch = null;
+        let bestScore = 0;
+        
+        columns.forEach(col => {
+            const colLower = col.toLowerCase();
+            let score = 0;
+            
+            // Exact match
+            if (colLower === fieldName) {
+                score = 100;
+            }
+            // Contains match
+            else if (colLower.includes(fieldName) || fieldName.includes(colLower)) {
+                score = 80;
+            }
+            // Partial match after removing common separators
+            else {
+                const cleanField = fieldName.replace(/[_\-\s]/g, '');
+                const cleanCol = colLower.replace(/[_\-\s]/g, '');
+                if (cleanCol.includes(cleanField) || cleanField.includes(cleanCol)) {
+                    score = 60;
+                }
+            }
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestMatch = col;
+            }
+        });
+        
+        if (bestMatch && bestScore > 50) {
+            select.value = bestMatch;
+        }
+    });
+    
+    showMessage('Auto-mapping completed. Please review the selections.', 'success');
+}
+
+// Clear all mappings
+function clearAll() {
+    document.querySelectorAll('.mapping-select').forEach(select => {
+        select.value = '';
+    });
+    showMessage('All mappings cleared.', 'info');
+}
+
+// Show status message
+function showMessage(message, type = 'info') {
+    const messageDiv = document.getElementById('status-message');
+    messageDiv.className = 'mb-4 p-4 rounded-lg';
+    
+    if (type === 'success') {
+        messageDiv.className += ' bg-green-100 text-green-800 border border-green-300';
+    } else if (type === 'error') {
+        messageDiv.className += ' bg-red-100 text-red-800 border border-red-300';
+    } else {
+        messageDiv.className += ' bg-blue-100 text-blue-800 border border-blue-300';
+    }
+    
+    messageDiv.textContent = message;
+    messageDiv.classList.remove('hidden');
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        messageDiv.classList.add('hidden');
+    }, 5000);
+}
+
+// Handle form submission
+document.getElementById('mapping-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    // Validate required fields
+    const requiredSelects = document.querySelectorAll('select[required]');
+    let valid = true;
+    
+    requiredSelects.forEach(select => {
+        if (!select.value) {
+            select.classList.add('border-red-500');
+            valid = false;
+        } else {
+            select.classList.remove('border-red-500');
+        }
+    });
+    
+    if (!valid) {
+        showMessage('Please map all required fields.', 'error');
+        return;
+    }
+    
+    // Collect mappings
+    const mappings = {};
+    document.querySelectorAll('.mapping-select').forEach(select => {
+        if (select.value) {
+            const fieldName = select.name.replace('mapping_', '');
+            mappings[fieldName] = select.value;
+        }
+    });
+    
+    console.log('Submitting mappings:', mappings);
+    
+    // Show loading state
+    const saveBtn = document.getElementById('save-btn');
+    const saveText = document.getElementById('save-text');
+    const saveLoading = document.getElementById('save-loading');
+    
+    saveBtn.disabled = true;
+    saveText.classList.add('hidden');
+    saveLoading.classList.remove('hidden');
+    
+    try {
+        const response = await fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify(mappings)
+        });
+        
+        const data = await response.json();
+        console.log('Response:', data);
+        
+        if (data.success) {
+            showMessage(data.message || 'Mappings saved successfully!', 'success');
+            
+            // Redirect after short delay
+            setTimeout(() => {
+                window.location.href = data.redirect || '/data-ingestion/';
+            }, 1500);
+        } else {
+            showMessage('Error: ' + (data.error || 'Failed to save mappings'), 'error');
+            
+            // Re-enable button
+            saveBtn.disabled = false;
+            saveText.classList.remove('hidden');
+            saveLoading.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showMessage('Network error: ' + error.message, 'error');
+        
+        // Re-enable button
+        saveBtn.disabled = false;
+        saveText.classList.remove('hidden');
+        saveLoading.classList.add('hidden');
+    }
+});
+
+// Run auto-map on page load if no mappings exist
+window.addEventListener('DOMContentLoaded', function() {
+    const hasMapping = Array.from(document.querySelectorAll('.mapping-select')).some(s => s.value);
+    if (!hasMapping) {
+        setTimeout(autoMap, 500);
+    }
+});
+</script>
+
+<style>
+/* Additional styles for better UX */
+.mapping-select:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.border-red-500 {
+    border-color: #ef4444 !important;
+}
+
+#status-message {
+    transition: all 0.3s ease;
+}
+</style>
+{% endblock %}

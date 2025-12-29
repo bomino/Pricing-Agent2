@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Generate Report - AI Pricing Agent{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <div class="flex items-center mb-4">
+            <a href="/analytics/reports/" class="text-navy-600 hover:text-navy-800 transition-colors mr-3">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <h1 class="text-3xl font-bold text-navy-900">Generate New Report</h1>
+        </div>
+        <p class="text-gray-600">Configure and generate custom analytics reports</p>
+    </div>
+
+    <!-- Report Generation Form -->
+    <form method="post" action="/analytics/reports/generate/" class="space-y-6">
+        {% csrf_token %}
+        
+        <!-- Report Configuration -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-navy-800 to-navy-700 rounded-t-lg">
+                <h2 class="text-lg font-semibold text-white flex items-center">
+                    <i class="fas fa-cog mr-2"></i> Report Configuration
+                </h2>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- Report Name -->
+                <div>
+                    <label for="report_name" class="block text-sm font-medium text-gray-700 mb-2">
+                        Report Name <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" 
+                           id="report_name" 
+                           name="report_name" 
+                           required
+                           placeholder="e.g., Q1 2025 Pricing Analysis"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500">
+                    <p class="mt-1 text-xs text-gray-500">Give your report a descriptive name</p>
+                </div>
+
+                <!-- Report Type -->
+                <div>
+                    <label for="report_type" class="block text-sm font-medium text-gray-700 mb-2">
+                        Report Type <span class="text-red-500">*</span>
+                    </label>
+                    <select id="report_type" 
+                            name="report_type" 
+                            required
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500"
+                            x-data
+                            @change="document.getElementById('report-description').textContent = $event.target.selectedOptions[0].dataset.description">
+                        <option value="" data-description="Select a report type to see its description">-- Select Report Type --</option>
+                        <option value="pricing" data-description="Comprehensive analysis of material pricing trends, volatility, and forecasts">
+                            Pricing Analysis
+                        </option>
+                        <option value="procurement" data-description="Summary of procurement activities, RFQs, quotes, and supplier responses">
+                            Procurement Summary
+                        </option>
+                        <option value="supplier" data-description="Detailed evaluation of supplier performance, response rates, and pricing competitiveness">
+                            Supplier Performance
+                        </option>
+                        <option value="cost" data-description="Cost breakdown analysis across categories, materials, and time periods">
+                            Cost Analysis
+                        </option>
+                        <option value="savings" data-description="Identifies cost savings opportunities and tracks realized savings">
+                            Savings Opportunities
+                        </option>
+                        <option value="market" data-description="Market trends, benchmarking, and competitive pricing analysis">
+                            Market Intelligence
+                        </option>
+                    </select>
+                    <p id="report-description" class="mt-1 text-xs text-gray-500">Select a report type to see its description</p>
+                </div>
+
+                <!-- Date Range -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="date_from" class="block text-sm font-medium text-gray-700 mb-2">
+                            Start Date <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" 
+                               id="date_from" 
+                               name="date_from" 
+                               required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500">
+                    </div>
+                    <div>
+                        <label for="date_to" class="block text-sm font-medium text-gray-700 mb-2">
+                            End Date <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" 
+                               id="date_to" 
+                               name="date_to" 
+                               required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500">
+                    </div>
+                </div>
+
+                <!-- Quick Date Range Buttons -->
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" 
+                            onclick="setDateRange(7)"
+                            class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        Last 7 Days
+                    </button>
+                    <button type="button" 
+                            onclick="setDateRange(30)"
+                            class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        Last 30 Days
+                    </button>
+                    <button type="button" 
+                            onclick="setDateRange(90)"
+                            class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        Last Quarter
+                    </button>
+                    <button type="button" 
+                            onclick="setDateRange(365)"
+                            class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        Last Year
+                    </button>
+                    <button type="button" 
+                            onclick="setCurrentMonth()"
+                            class="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        This Month
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Options -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-navy-900 flex items-center">
+                    <i class="fas fa-sliders-h mr-2"></i> Additional Options
+                </h2>
+            </div>
+            <div class="p-6 space-y-4">
+                <!-- Include Charts -->
+                <div class="flex items-center">
+                    <input type="checkbox" 
+                           id="include_charts" 
+                           name="include_charts" 
+                           checked
+                           class="w-4 h-4 text-navy-600 border-gray-300 rounded focus:ring-navy-500">
+                    <label for="include_charts" class="ml-2 text-sm text-gray-700">
+                        Include charts and visualizations
+                    </label>
+                </div>
+
+                <!-- Include Raw Data -->
+                <div class="flex items-center">
+                    <input type="checkbox" 
+                           id="include_raw_data" 
+                           name="include_raw_data"
+                           class="w-4 h-4 text-navy-600 border-gray-300 rounded focus:ring-navy-500">
+                    <label for="include_raw_data" class="ml-2 text-sm text-gray-700">
+                        Include raw data tables
+                    </label>
+                </div>
+
+                <!-- Email Report -->
+                <div class="flex items-center">
+                    <input type="checkbox" 
+                           id="email_report" 
+                           name="email_report"
+                           class="w-4 h-4 text-navy-600 border-gray-300 rounded focus:ring-navy-500">
+                    <label for="email_report" class="ml-2 text-sm text-gray-700">
+                        Email report when complete
+                    </label>
+                </div>
+
+                <!-- Format Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
+                    <div class="flex gap-4">
+                        <label class="flex items-center">
+                            <input type="radio" name="format" value="pdf" checked class="text-navy-600 focus:ring-navy-500">
+                            <span class="ml-2 text-sm text-gray-700">PDF</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="format" value="excel" class="text-navy-600 focus:ring-navy-500">
+                            <span class="ml-2 text-sm text-gray-700">Excel</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" name="format" value="csv" class="text-navy-600 focus:ring-navy-500">
+                            <span class="ml-2 text-sm text-gray-700">CSV</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                <div>
+                    <label for="notes" class="block text-sm font-medium text-gray-700 mb-2">
+                        Additional Notes (Optional)
+                    </label>
+                    <textarea id="notes" 
+                              name="notes" 
+                              rows="3"
+                              placeholder="Any specific requirements or focus areas for this report..."
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-between items-center">
+            <a href="/analytics/reports/" 
+               class="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                Cancel
+            </a>
+            <div class="flex gap-3">
+                <button type="button"
+                        onclick="saveDraft()"
+                        class="px-6 py-2 text-navy-600 bg-white border border-navy-600 rounded-lg hover:bg-navy-50 transition-colors">
+                    <i class="fas fa-save mr-2"></i>Save as Draft
+                </button>
+                <button type="submit"
+                        class="px-6 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors">
+                    <i class="fas fa-play mr-2"></i>Generate Report
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Report Templates -->
+    <div class="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-navy-900 flex items-center">
+                <i class="fas fa-bookmark mr-2"></i> Quick Templates
+            </h2>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button onclick="loadTemplate('monthly_pricing')"
+                        class="p-4 border border-gray-200 rounded-lg hover:border-navy-500 hover:bg-navy-50 transition-all text-left">
+                    <i class="fas fa-chart-line text-blue-600 mb-2"></i>
+                    <h4 class="font-semibold text-navy-900">Monthly Pricing Review</h4>
+                    <p class="text-xs text-gray-500 mt-1">Standard monthly pricing analysis report</p>
+                </button>
+                <button onclick="loadTemplate('supplier_quarterly')"
+                        class="p-4 border border-gray-200 rounded-lg hover:border-navy-500 hover:bg-navy-50 transition-all text-left">
+                    <i class="fas fa-users text-green-600 mb-2"></i>
+                    <h4 class="font-semibold text-navy-900">Quarterly Supplier Review</h4>
+                    <p class="text-xs text-gray-500 mt-1">Comprehensive supplier performance analysis</p>
+                </button>
+                <button onclick="loadTemplate('cost_savings')"
+                        class="p-4 border border-gray-200 rounded-lg hover:border-navy-500 hover:bg-navy-50 transition-all text-left">
+                    <i class="fas fa-piggy-bank text-purple-600 mb-2"></i>
+                    <h4 class="font-semibold text-navy-900">Cost Savings Report</h4>
+                    <p class="text-xs text-gray-500 mt-1">Identify savings opportunities</p>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function setDateRange(days) {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - days);
+    
+    document.getElementById('date_from').value = startDate.toISOString().split('T')[0];
+    document.getElementById('date_to').value = endDate.toISOString().split('T')[0];
+}
+
+function setCurrentMonth() {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    document.getElementById('date_from').value = firstDay.toISOString().split('T')[0];
+    document.getElementById('date_to').value = lastDay.toISOString().split('T')[0];
+}
+
+function loadTemplate(templateType) {
+    switch(templateType) {
+        case 'monthly_pricing':
+            document.getElementById('report_name').value = 'Monthly Pricing Analysis - ' + new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+            document.getElementById('report_type').value = 'pricing';
+            setDateRange(30);
+            document.getElementById('include_charts').checked = true;
+            break;
+        case 'supplier_quarterly':
+            document.getElementById('report_name').value = 'Q' + Math.ceil((new Date().getMonth() + 1) / 3) + ' ' + new Date().getFullYear() + ' Supplier Performance';
+            document.getElementById('report_type').value = 'supplier';
+            setDateRange(90);
+            document.getElementById('include_charts').checked = true;
+            break;
+        case 'cost_savings':
+            document.getElementById('report_name').value = 'Cost Savings Opportunities - ' + new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+            document.getElementById('report_type').value = 'savings';
+            setDateRange(90);
+            document.getElementById('include_raw_data').checked = true;
+            break;
+    }
+    
+    // Update description
+    const select = document.getElementById('report_type');
+    document.getElementById('report-description').textContent = select.selectedOptions[0].dataset.description;
+    
+    // Show toast notification
+    showToast('Template loaded successfully', 'success');
+}
+
+function saveDraft() {
+    // Add draft saving logic here
+    showToast('Report configuration saved as draft', 'success');
+}
+
+// Set default date range on page load
+document.addEventListener('DOMContentLoaded', function() {
+    setDateRange(30);
+});
+</script>
+{% endblock %}

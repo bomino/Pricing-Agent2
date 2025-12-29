@@ -1,0 +1,387 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pricing-django
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: django
+    version: v1.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: pricing-agent
+      component: django
+  template:
+    metadata:
+      labels:
+        app: pricing-agent
+        component: django
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics/"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      imagePullSecrets:
+      - name: pricing-docker-registry
+      
+      initContainers:
+      - name: django-migrate
+        image: your-registry.com/pricing-agent/django:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Running database migrations..."
+          poetry run python django_app/manage.py migrate --noinput
+          echo "Creating superuser if needed..."
+          poetry run python django_app/manage.py shell -c "
+          from django.contrib.auth import get_user_model;
+          User = get_user_model();
+          if not User.objects.filter(email='admin@example.com').exists():
+              User.objects.create_superuser('admin@example.com', 'admin123');
+              print('Superuser created')
+          else:
+              print('Superuser already exists')
+          "
+        env:
+        - name: DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: DEBUG
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: SECRET_KEY
+        - name: DATABASE_URL
+          value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@pricing-postgres:5432/$(POSTGRES_DB)"
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: POSTGRES_DB
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: REDIS_URL
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: REDIS_PASSWORD
+      
+      containers:
+      - name: django
+        image: your-registry.com/pricing-agent/django:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: DEBUG
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: SECRET_KEY
+        - name: ALLOWED_HOSTS
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: ALLOWED_HOSTS
+        - name: DATABASE_URL
+          value: "postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@pricing-postgres:5432/$(POSTGRES_DB)"
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: POSTGRES_DB
+        - name: REDIS_URL
+          value: "redis://:$(REDIS_PASSWORD)@pricing-redis:6379/0"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: REDIS_PASSWORD
+        - name: CELERY_BROKER_URL
+          value: "redis://:$(REDIS_PASSWORD)@pricing-redis:6379/0"
+        - name: ML_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: ML_SERVICE_URL
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: pricing-agent-secrets
+              key: SENTRY_DSN
+              optional: true
+        - name: SESSION_COOKIE_SECURE
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: SESSION_COOKIE_SECURE
+        - name: CSRF_COOKIE_SECURE
+          valueFrom:
+            configMapKeyRef:
+              name: pricing-agent-config
+              key: CSRF_COOKIE_SECURE
+        
+        volumeMounts:
+        - name: static-files
+          mountPath: /app/staticfiles
+        - name: media-files
+          mountPath: /app/media
+        - name: logs
+          mountPath: /app/logs
+        
+        livenessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        startupProbe:
+          httpGet:
+            path: /health/
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 10
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      
+      volumes:
+      - name: static-files
+        persistentVolumeClaim:
+          claimName: pricing-static-pvc
+      - name: media-files
+        persistentVolumeClaim:
+          claimName: pricing-media-pvc
+      - name: logs
+        persistentVolumeClaim:
+          claimName: pricing-logs-pvc
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - django
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pricing-django
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: django
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics/"
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    app: pricing-agent
+    component: django
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pricing-django-hpa
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: django
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pricing-django
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: django_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "10"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pricing-django-pdb
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: django
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: pricing-agent
+      component: django
+
+---
+# Persistent Volume Claims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pricing-static-pvc
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: django
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: nfs-storage  # Use appropriate storage class for shared storage
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pricing-media-pvc
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: django
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: nfs-storage
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pricing-logs-pvc
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: django
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: nfs-storage

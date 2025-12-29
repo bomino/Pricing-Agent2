@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+
+{% block title %}
+  Home - AI Pricing Agent - VTX
+{% endblock %}
+
+{% block content %}
+  <div class="p-6">
+    <div class="max-w-7xl mx-auto">
+      <!-- Hero Section -->
+      <div class="bg-gradient-to-r from-navy-800 to-navy-900 rounded-xl shadow-xl p-8 mb-8 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-4xl font-bold mb-4">Welcome to AI Pricing Agent</h1>
+            <p class="text-xl mb-6">Procurement and pricing intelligence platform</p>
+            <a href="/dashboard" class="bg-white text-navy-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition inline-block"><i class="fas fa-chart-line mr-2"></i>Go to Dashboard</a>
+          </div>
+          <div class="hidden lg:block">
+            <img src="/static/images/icon-192x192.png" alt="VTX Icon" class="h-32 w-32 opacity-50" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Data Upload Card -->
+        <div class="bg-gradient-to-br from-navy-600 to-navy-800 rounded-lg shadow-lg p-6 text-white hover:shadow-xl transition-shadow cursor-pointer" onclick="window.location.href='/data-ingestion/'">
+          <div class="flex items-center justify-between mb-4">
+            <div class="p-3 bg-white bg-opacity-20 rounded-lg">
+              <i class="fas fa-cloud-upload-alt text-2xl"></i>
+            </div>
+            <span class="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">New</span>
+          </div>
+          <h3 class="text-lg font-semibold mb-1">Data Upload</h3>
+          <p class="text-sm text-navy-200 mb-3">Import procurement data</p>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-navy-300">CSV, Excel, Parquet</span>
+            <i class="fas fa-arrow-right text-navy-300"></i>
+          </div>
+        </div>
+
+        <!-- Create RFQ Card -->
+        <div class="bg-gradient-to-br from-cyan-600 to-cyan-800 rounded-lg shadow-lg p-6 text-white hover:shadow-xl transition-shadow cursor-pointer" onclick="window.location.href='/procurement/rfqs/create/'">
+          <div class="flex items-center justify-between mb-4">
+            <div class="p-3 bg-white bg-opacity-20 rounded-lg">
+              <i class="fas fa-file-invoice text-2xl"></i>
+            </div>
+            <span class="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">Quick</span>
+          </div>
+          <h3 class="text-lg font-semibold mb-1">Create RFQ</h3>
+          <p class="text-sm text-cyan-200 mb-3">Start new quotation request</p>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-cyan-300">Fast track</span>
+            <i class="fas fa-arrow-right text-cyan-300"></i>
+          </div>
+        </div>
+
+        <!-- Price Check Card -->
+        <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-lg shadow-lg p-6 text-white hover:shadow-xl transition-shadow cursor-pointer" onclick="window.location.href='/pricing/materials/'">
+          <div class="flex items-center justify-between mb-4">
+            <div class="p-3 bg-white bg-opacity-20 rounded-lg">
+              <i class="fas fa-tags text-2xl"></i>
+            </div>
+            <span class="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">AI</span>
+          </div>
+          <h3 class="text-lg font-semibold mb-1">Price Check</h3>
+          <p class="text-sm text-emerald-200 mb-3">AI-powered pricing analysis</p>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-emerald-300">Real-time</span>
+            <i class="fas fa-arrow-right text-emerald-300"></i>
+          </div>
+        </div>
+
+        <!-- Analytics Card -->
+        <div class="bg-gradient-to-br from-purple-600 to-purple-800 rounded-lg shadow-lg p-6 text-white hover:shadow-xl transition-shadow cursor-pointer" onclick="window.location.href='/analytics/'">
+          <div class="flex items-center justify-between mb-4">
+            <div class="p-3 bg-white bg-opacity-20 rounded-lg">
+              <i class="fas fa-chart-bar text-2xl"></i>
+            </div>
+            <span class="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">Live</span>
+          </div>
+          <h3 class="text-lg font-semibold mb-1">Analytics</h3>
+          <p class="text-sm text-purple-200 mb-3">View detailed reports</p>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-purple-300">Dashboards</span>
+            <i class="fas fa-arrow-right text-purple-300"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Features Grid -->
+      <div class="bg-white rounded-lg shadow p-8">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">Platform Features</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div class="flex items-start">
+            <i class="fas fa-robot text-navy-600 text-xl mt-1"></i>
+            <div class="ml-4">
+              <h3 class="font-semibold text-gray-900">AI-Powered Predictions</h3>
+              <p class="text-sm text-gray-600 mt-1">Machine learning models predict future prices and market trends</p>
+            </div>
+          </div>
+
+          <div class="flex items-start">
+            <i class="fas fa-bell text-navy-600 text-xl mt-1"></i>
+            <div class="ml-4">
+              <h3 class="font-semibold text-gray-900">Smart Alerts</h3>
+              <p class="text-sm text-gray-600 mt-1">Real-time notifications for price changes and anomalies</p>
+            </div>
+          </div>
+
+          <div class="flex items-start">
+            <i class="fas fa-file-contract text-navy-600 text-xl mt-1"></i>
+            <div class="ml-4">
+              <h3 class="font-semibold text-gray-900">RFQ Management</h3>
+              <p class="text-sm text-gray-600 mt-1">Streamlined request for quotation workflow</p>
+            </div>
+          </div>
+
+          <div class="flex items-start">
+            <i class="fas fa-chart-line text-navy-600 text-xl mt-1"></i>
+            <div class="ml-4">
+              <h3 class="font-semibold text-gray-900">Advanced Analytics</h3>
+              <p class="text-sm text-gray-600 mt-1">Comprehensive reporting and data visualization</p>
+            </div>
+          </div>
+
+          <div class="flex items-start">
+            <i class="fas fa-sync text-navy-600 text-xl mt-1"></i>
+            <div class="ml-4">
+              <h3 class="font-semibold text-gray-900">ERP Integration</h3>
+              <p class="text-sm text-gray-600 mt-1">Seamless integration with existing systems</p>
+            </div>
+          </div>
+
+          <div class="flex items-start">
+            <i class="fas fa-shield-alt text-navy-600 text-xl mt-1"></i>
+            <div class="ml-4">
+              <h3 class="font-semibold text-gray-900">Enterprise Security</h3>
+              <p class="text-sm text-gray-600 mt-1">Bank-grade security with audit trails</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

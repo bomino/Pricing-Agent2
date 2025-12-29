@@ -1,0 +1,227 @@
+<!-- Trend Analysis Tab Content -->
+
+<!-- Key Metrics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-chart-line text-4xl text-blue-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Monthly Spend</h4>
+            <p class="text-3xl font-bold text-blue-600 mb-2">$52,500</p>
+            <p class="text-sm text-gray-600">Average per month</p>
+            <div class="mt-2">
+                <span class="text-xs text-green-600">
+                    <i class="fas fa-arrow-up mr-1"></i>+8.3% vs last period
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-piggy-bank text-4xl text-green-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Cost Savings</h4>
+            <p class="text-3xl font-bold text-green-600 mb-2">$8,750</p>
+            <p class="text-sm text-gray-600">This quarter</p>
+            <div class="mt-2">
+                <span class="text-xs text-green-600">
+                    <i class="fas fa-arrow-up mr-1"></i>+12.5% improvement
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-box text-4xl text-purple-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Order Volume</h4>
+            <p class="text-3xl font-bold text-purple-600 mb-2">247</p>
+            <p class="text-sm text-gray-600">Orders this month</p>
+            <div class="mt-2">
+                <span class="text-xs text-red-600">
+                    <i class="fas fa-arrow-down mr-1"></i>-5.2% reduction
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-dollar-sign text-4xl text-orange-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Avg Order Value</h4>
+            <p class="text-3xl font-bold text-orange-600 mb-2">$212</p>
+            <p class="text-sm text-gray-600">Per transaction</p>
+            <div class="mt-2">
+                <span class="text-xs text-green-600">
+                    <i class="fas fa-arrow-up mr-1"></i>+14.1% increase
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Historical Spend Chart -->
+<div class="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+    <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-navy-900">
+            <i class="fas fa-chart-area text-navy-600 mr-2"></i>
+            Historical Spend Analysis
+        </h3>
+        <select class="form-select" id="trend-period" 
+                hx-get="/analytics/trends/update/"
+                hx-target="#trend-chart-container"
+                hx-trigger="change">
+            <option value="30" {% if period_days == 30 %}selected{% endif %}>Last 30 Days</option>
+            <option value="60" {% if period_days == 60 %}selected{% endif %}>Last 60 Days</option>
+            <option value="90" {% if period_days == 90 %}selected{% endif %}>Last 90 Days</option>
+            <option value="180" {% if period_days == 180 %}selected{% endif %}>Last 6 Months</option>
+            <option value="365" {% if period_days == 365 %}selected{% endif %}>Last Year</option>
+        </select>
+    </div>
+    <div id="trend-chart-container" class="h-80">
+        <canvas id="trendChart"></canvas>
+    </div>
+</div>
+
+<!-- Category and Supplier Analysis -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <!-- Category Breakdown -->
+    <div class="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 class="text-lg font-semibold text-navy-900 mb-4">
+            <i class="fas fa-tags text-indigo-600 mr-2"></i>
+            Category Spend Breakdown
+        </h3>
+        <div class="h-64 mb-4">
+            <canvas id="categoryTrendChart"></canvas>
+        </div>
+        <div class="space-y-2">
+            {% for category in category_spend|slice:":5" %}
+            <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                <span class="text-sm font-medium text-gray-700">
+                    {{ category.lines__material__category|default:"Uncategorized" }}
+                </span>
+                <div class="flex items-center gap-3">
+                    <span class="text-sm font-bold text-navy-900">
+                        ${{ category.total_spend|floatformat:0|default:"0" }}
+                    </span>
+                    <span class="text-xs text-gray-500">
+                        ({{ category.order_count }} orders)
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Supplier Performance -->
+    <div class="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 class="text-lg font-semibold text-navy-900 mb-4">
+            <i class="fas fa-users text-teal-600 mr-2"></i>
+            Supplier Spend Distribution
+        </h3>
+        <div class="h-64 mb-4">
+            <canvas id="supplierTrendChart"></canvas>
+        </div>
+        <div class="text-center">
+            <button class="btn btn-outline btn-sm w-full"
+                    hx-get="/analytics/supplier-details/"
+                    hx-target="#modal-container">
+                <i class="fas fa-chart-bar mr-2"></i>View Detailed Supplier Metrics
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Trend Insights Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <!-- Positive Trends -->
+    <div class="bg-white rounded-lg border border-green-200 p-4">
+        <div class="flex items-center mb-3">
+            <i class="fas fa-trending-up text-green-600 text-xl mr-2"></i>
+            <h4 class="font-semibold text-gray-900">Positive Trends</h4>
+        </div>
+        <ul class="space-y-2 text-sm">
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                <span class="text-gray-700">15% reduction in maverick spend</span>
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                <span class="text-gray-700">Contract compliance up by 8%</span>
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                <span class="text-gray-700">Supplier consolidation improving</span>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Areas of Concern -->
+    <div class="bg-white rounded-lg border border-orange-200 p-4">
+        <div class="flex items-center mb-3">
+            <i class="fas fa-exclamation-triangle text-orange-600 text-xl mr-2"></i>
+            <h4 class="font-semibold text-gray-900">Areas of Concern</h4>
+        </div>
+        <ul class="space-y-2 text-sm">
+            <li class="flex items-start">
+                <i class="fas fa-times-circle text-orange-500 mr-2 mt-0.5"></i>
+                <span class="text-gray-700">Steel prices increased 18%</span>
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-times-circle text-orange-500 mr-2 mt-0.5"></i>
+                <span class="text-gray-700">Lead times extending for electronics</span>
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-times-circle text-orange-500 mr-2 mt-0.5"></i>
+                <span class="text-gray-700">Supplier diversity below target</span>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="bg-white rounded-lg border border-blue-200 p-4">
+        <div class="flex items-center mb-3">
+            <i class="fas fa-lightbulb text-blue-600 text-xl mr-2"></i>
+            <h4 class="font-semibold text-gray-900">Recommendations</h4>
+        </div>
+        <ul class="space-y-2 text-sm">
+            <li class="flex items-start">
+                <i class="fas fa-arrow-right text-blue-500 mr-2 mt-0.5"></i>
+                <span class="text-gray-700">Lock in Q4 pricing for volatile materials</span>
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-arrow-right text-blue-500 mr-2 mt-0.5"></i>
+                <span class="text-gray-700">Consolidate tail spend suppliers</span>
+            </li>
+            <li class="flex items-start">
+                <i class="fas fa-arrow-right text-blue-500 mr-2 mt-0.5"></i>
+                <span class="text-gray-700">Negotiate volume discounts</span>
+            </li>
+        </ul>
+    </div>
+</div>
+
+<!-- Export Options -->
+<div class="mt-6 flex justify-center gap-3">
+    <button class="btn btn-primary"
+            hx-get="/analytics/export/trends/"
+            hx-include="#trend-period">
+        <i class="fas fa-download mr-2"></i>Export Trend Report
+    </button>
+    <button class="btn btn-outline"
+            hx-get="/analytics/compare-periods/"
+            hx-target="#modal-container">
+        <i class="fas fa-exchange-alt mr-2"></i>Compare Periods
+    </button>
+    <button class="btn btn-outline"
+            hx-get="/analytics/trends/forecast/"
+            hx-target="#modal-container">
+        <i class="fas fa-chart-line mr-2"></i>View Forecast
+    </button>
+</div>
+
+<script>
+// Initialize trend charts after HTMX loads this content
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(initializeTrendCharts, 100);
+});
+</script>

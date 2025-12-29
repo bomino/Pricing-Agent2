@@ -1,0 +1,175 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="AI-Powered Pricing Agent for Manufacturing & Construction Procurement">
+    <meta name="author" content="VTX">
+    
+    <title>{% block title %}AI Pricing Agent - VTX{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="{% static 'images/icon-192x192.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'images/icon-192x192.png' %}">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="{% static 'css/main.css' %}" as="style">
+    <link rel="preload" href="{% static 'js/config/theme.js' %}" as="script">
+    
+    <!-- External CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    
+    <!-- Configure Tailwind with our theme -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: {
+                            50: '#f0f4f8',
+                            100: '#d9e2ec',
+                            200: '#bcccdc',
+                            300: '#9fb3c8',
+                            400: '#829ab1',
+                            500: '#627d98',
+                            600: '#486581',
+                            700: '#334e68',
+                            800: '#243b53',
+                            900: '#102a43',
+                            950: '#0a1929',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50" x-data="{ sidebarOpen: true }">
+    <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        {% include 'components/sidebar.html' %}
+        
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- Header -->
+            {% include 'components/header.html' %}
+            
+            <!-- Page Content -->
+            <main class="flex-1 overflow-y-auto bg-gray-50">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+    
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 flex items-center space-x-4">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-navy-700"></div>
+            <span class="text-navy-700 font-medium">Loading...</span>
+        </div>
+    </div>
+    
+    <!-- External JavaScript -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Core JavaScript Modules -->
+    <script type="module">
+        // Import core modules
+        import Theme from '{% static "js/config/theme.js" %}';
+        import ChartConfig from '{% static "js/config/charts.js" %}';
+        import API from '{% static "js/utils/api.js" %}';
+        
+        // Initialize theme
+        Theme.initTheme();
+        
+        // Make modules available globally if needed
+        window.AppTheme = Theme;
+        window.ChartConfig = ChartConfig;
+        window.API = API;
+        
+        // HTMX configuration
+        document.body.addEventListener('htmx:configRequest', function(evt) {
+            evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+        });
+        
+        // Global notification function
+        window.showNotification = function(message, type = 'info') {
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-navy-600'
+            };
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-circle',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info-circle'
+            };
+            
+            toast.className = `flex items-center p-4 rounded-lg shadow-lg ${colors[type]} text-white animate-fade-in`;
+            toast.innerHTML = `
+                <i class="fas ${icons[type]} mr-3"></i>
+                <span>${message}</span>
+            `;
+            
+            document.getElementById('toast-container').appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
+        
+        // Loading overlay functions
+        window.showLoading = function() {
+            document.getElementById('loading-overlay').classList.remove('hidden');
+        };
+        
+        window.hideLoading = function() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        };
+        
+        // HTMX loading states
+        document.body.addEventListener('htmx:beforeRequest', function(event) {
+            const target = event.detail.target;
+            if (target.dataset.showLoading !== 'false') {
+                target.classList.add('loading');
+            }
+        });
+        
+        document.body.addEventListener('htmx:afterRequest', function(event) {
+            const target = event.detail.target;
+            target.classList.remove('loading');
+        });
+        
+        // Initialize components based on page
+        document.addEventListener('DOMContentLoaded', function() {
+            // Page-specific initialization
+            const pageInit = document.querySelector('[data-page-init]');
+            if (pageInit) {
+                const initFunction = pageInit.dataset.pageInit;
+                if (window[initFunction]) {
+                    window[initFunction]();
+                }
+            }
+        });
+    </script>
+    
+    {% block page_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,384 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pricing-agent-ingress
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: ingress
+  annotations:
+    # Nginx Ingress Controller annotations
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    
+    # Security annotations
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header X-Frame-Options DENY;
+      add_header X-Content-Type-Options nosniff;
+      add_header X-XSS-Protection "1; mode=block";
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload";
+      add_header Referrer-Policy "strict-origin-when-cross-origin";
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'";
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit-connections: "10"
+    nginx.ingress.kubernetes.io/rate-limit-requests-per-minute: "300"
+    nginx.ingress.kubernetes.io/rate-limit-window-size: "1m"
+    
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://pricing-agent.yourdomain.com"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    
+    # Client body size
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    
+    # Timeouts
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    
+    # Load balancing
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    
+    # SSL configuration
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES256-GCM-SHA384,ECDHE-RSA-AES256-GCM-SHA384"
+    nginx.ingress.kubernetes.io/ssl-prefer-server-ciphers: "true"
+    
+spec:
+  tls:
+  - hosts:
+    - pricing-agent.yourdomain.com
+    - api.yourdomain.com
+    secretName: pricing-agent-tls
+  
+  rules:
+  # Main application domain
+  - host: pricing-agent.yourdomain.com
+    http:
+      paths:
+      # Health check (no authentication required)
+      - path: /health
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-django
+            port:
+              number: 8000
+      
+      # Static files (cached)
+      - path: /static
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-django
+            port:
+              number: 8000
+      
+      # Media files
+      - path: /media
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-django
+            port:
+              number: 8000
+      
+      # Admin interface (restricted)
+      - path: /admin
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-django
+            port:
+              number: 8000
+      
+      # API endpoints
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-django
+            port:
+              number: 8000
+      
+      # Authentication endpoints
+      - path: /auth
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-django
+            port:
+              number: 8000
+      
+      # Account management
+      - path: /accounts
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-django
+            port:
+              number: 8000
+      
+      # ML Service endpoints
+      - path: /ml
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-fastapi
+            port:
+              number: 8001
+      
+      # WebSocket connections for ML service
+      - path: /ws
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-fastapi
+            port:
+              number: 8001
+      
+      # Default Django application
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-django
+            port:
+              number: 8000
+
+  # API subdomain
+  - host: api.yourdomain.com
+    http:
+      paths:
+      # Health checks
+      - path: /health
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-django
+            port:
+              number: 8000
+      
+      # Django API
+      - path: /v1
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-django
+            port:
+              number: 8000
+      
+      # ML API
+      - path: /ml/v1
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-fastapi
+            port:
+              number: 8001
+      
+      # WebSocket for ML
+      - path: /ws
+        pathType: Prefix
+        backend:
+          service:
+            name: pricing-fastapi
+            port:
+              number: 8001
+
+---
+# Ingress for internal services (monitoring, etc.)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pricing-agent-internal-ingress
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: internal-ingress
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    
+    # IP whitelist for internal services
+    nginx.ingress.kubernetes.io/whitelist-source-range: |
+      10.0.0.0/8,
+      172.16.0.0/12,
+      192.168.0.0/16
+    
+    # Basic auth for additional security
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: pricing-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Pricing Agent Internal Services"
+    
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+spec:
+  tls:
+  - hosts:
+    - internal.pricing-agent.yourdomain.com
+    secretName: pricing-agent-internal-tls
+  
+  rules:
+  - host: internal.pricing-agent.yourdomain.com
+    http:
+      paths:
+      # Prometheus metrics
+      - path: /metrics
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus
+            port:
+              number: 9090
+      
+      # Grafana dashboards
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 3000
+
+---
+# Network Policy for ingress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pricing-agent-ingress-policy
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: pricing-agent
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  ingress:
+  # Allow ingress controller traffic
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: nginx-ingress
+    ports:
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 8001
+  
+  # Allow internal communication
+  - from:
+    - podSelector:
+        matchLabels:
+          app: pricing-agent
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 6379  # Redis
+    - protocol: TCP
+      port: 8000  # Django
+    - protocol: TCP
+      port: 8001  # FastAPI
+  
+  # Allow monitoring traffic
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: pricing-agent-monitoring
+    ports:
+    - protocol: TCP
+      port: 9187  # Postgres exporter
+    - protocol: TCP
+      port: 9121  # Redis exporter
+    - protocol: TCP
+      port: 9540  # Celery exporter
+  
+  egress:
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  
+  # Allow HTTPS outbound for external APIs
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+  
+  # Allow internal communication
+  - to:
+    - podSelector:
+        matchLabels:
+          app: pricing-agent
+    ports:
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 8000
+    - protocol: TCP
+      port: 8001
+
+---
+# Basic auth secret for internal services
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pricing-basic-auth
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: basic-auth
+type: Opaque
+data:
+  # admin:admin123 (change in production)
+  # Generated with: htpasswd -nb admin admin123 | base64 -w 0
+  auth: YWRtaW46JGFwcjEkSDY5OVAzV1ckU1lORUNFWkdOTXRDTEVQM1RVV1RjLg==
+
+---
+# Certificate issuer for Let's Encrypt
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@yourdomain.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: admin@yourdomain.com
+    privateKeySecretRef:
+      name: letsencrypt-staging
+    solvers:
+    - http01:
+        ingress:
+          class: nginx

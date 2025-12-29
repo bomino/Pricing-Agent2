@@ -1,0 +1,323 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Resolve Matching Conflicts{% endblock %}
+
+{% block extra_head %}
+<style>
+    .conflict-card {
+        transition: all 0.3s ease;
+        border-left: 4px solid transparent;
+    }
+    .conflict-card.supplier {
+        border-left-color: #3b82f6;
+    }
+    .conflict-card.material {
+        border-left-color: #10b981;
+    }
+    .conflict-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .similarity-badge {
+        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+    }
+    .similarity-high {
+        background-color: #fef3c7;
+        color: #92400e;
+    }
+    .similarity-medium {
+        background-color: #fed7aa;
+        color: #9a3412;
+    }
+    .similarity-low {
+        background-color: #e5e7eb;
+        color: #374151;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Resolve Matching Conflicts</h1>
+                    <p class="text-gray-600 mt-2">Upload: {{ upload.original_filename }}</p>
+                </div>
+                <a href="{% url 'data_ingestion:upload_detail' upload.id %}" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Upload
+                </a>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-lg shadow">
+                <p class="text-sm text-gray-600">Total Conflicts</p>
+                <p class="text-2xl font-bold text-gray-900">{{ stats.total }}</p>
+            </div>
+            <div class="bg-yellow-50 p-4 rounded-lg shadow">
+                <p class="text-sm text-yellow-700">Pending</p>
+                <p class="text-2xl font-bold text-yellow-900">{{ stats.pending }}</p>
+            </div>
+            <div class="bg-green-50 p-4 rounded-lg shadow">
+                <p class="text-sm text-green-700">Resolved</p>
+                <p class="text-2xl font-bold text-green-900">{{ stats.resolved }}</p>
+            </div>
+            <div class="bg-blue-50 p-4 rounded-lg shadow">
+                <p class="text-sm text-blue-700">Suppliers</p>
+                <p class="text-2xl font-bold text-blue-900">{{ stats.supplier_conflicts }}</p>
+            </div>
+            <div class="bg-emerald-50 p-4 rounded-lg shadow">
+                <p class="text-sm text-emerald-700">Materials</p>
+                <p class="text-2xl font-bold text-emerald-900">{{ stats.material_conflicts }}</p>
+            </div>
+            <div class="bg-purple-50 p-4 rounded-lg shadow">
+                <p class="text-sm text-purple-700">Auto-Resolved</p>
+                <p class="text-2xl font-bold text-purple-900">{{ stats.auto_resolved }}</p>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-white p-4 rounded-lg shadow mb-6">
+            <form method="get" class="flex gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                    <select name="type" class="px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="">All Types</option>
+                        <option value="supplier" {% if current_type == 'supplier' %}selected{% endif %}>Suppliers</option>
+                        <option value="material" {% if current_type == 'material' %}selected{% endif %}>Materials</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                    <select name="status" class="px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="">All Status</option>
+                        <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="resolved_match" {% if current_status == 'resolved_match' %}selected{% endif %}>Matched</option>
+                        <option value="resolved_new" {% if current_status == 'resolved_new' %}selected{% endif %}>New</option>
+                        <option value="auto_resolved" {% if current_status == 'auto_resolved' %}selected{% endif %}>Auto-Resolved</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        <i class="fas fa-filter mr-2"></i>Apply Filters
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Bulk Actions -->
+        {% if stats.pending > 0 %}
+        <div class="bg-white p-4 rounded-lg shadow mb-6">
+            <div class="flex gap-4">
+                <button onclick="bulkAutoResolve()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                    <i class="fas fa-magic mr-2"></i>Auto-Resolve High Confidence
+                </button>
+                <button onclick="bulkMarkAsNew()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    <i class="fas fa-plus-circle mr-2"></i>Mark Selected as New
+                </button>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Conflicts List -->
+        <div class="space-y-4">
+            {% for conflict in page_obj %}
+            <div class="conflict-card {{ conflict.conflict_type }} bg-white p-6 rounded-lg shadow">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="text-lg font-semibold">{{ conflict.incoming_value }}</span>
+                            {% if conflict.incoming_code %}
+                            <span class="text-sm text-gray-500">({{ conflict.incoming_code }})</span>
+                            {% endif %}
+                            <span class="px-2 py-1 text-xs rounded-full
+                                {% if conflict.conflict_type == 'supplier' %}bg-blue-100 text-blue-800
+                                {% else %}bg-green-100 text-green-800{% endif %}">
+                                {{ conflict.get_conflict_type_display }}
+                            </span>
+                        </div>
+
+                        <!-- Potential Matches -->
+                        {% if conflict.potential_matches %}
+                        <div class="mb-3">
+                            <p class="text-sm text-gray-600 mb-1">Potential Matches:</p>
+                            <div class="flex flex-wrap gap-2">
+                                {% for match in conflict.potential_matches|slice:":3" %}
+                                <span class="similarity-badge
+                                    {% if match.similarity >= 0.9 %}similarity-high
+                                    {% elif match.similarity >= 0.8 %}similarity-medium
+                                    {% else %}similarity-low{% endif %}">
+                                    {{ match.name }} ({{ match.similarity|floatformat:0 }}%)
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Status -->
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm text-gray-500">Row #{{ conflict.staging_record.row_number }}</span>
+                            <span class="px-2 py-1 text-xs rounded-full
+                                {% if conflict.status == 'pending' %}bg-yellow-100 text-yellow-800
+                                {% elif conflict.status == 'resolved_match' %}bg-green-100 text-green-800
+                                {% elif conflict.status == 'resolved_new' %}bg-blue-100 text-blue-800
+                                {% else %}bg-purple-100 text-purple-800{% endif %}">
+                                {{ conflict.get_status_display }}
+                            </span>
+                            {% if conflict.resolved_by %}
+                            <span class="text-xs text-gray-500">
+                                by {{ conflict.resolved_by.username }} at {{ conflict.resolved_at|date:"M j, g:i A" }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2">
+                        {% if conflict.status == 'pending' %}
+                        <input type="checkbox" class="conflict-checkbox" value="{{ conflict.id }}">
+                        <a href="{% url 'data_ingestion:conflict_detail' conflict.id %}"
+                           class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            <i class="fas fa-search mr-2"></i>Resolve
+                        </a>
+                        {% else %}
+                        <a href="{% url 'data_ingestion:conflict_detail' conflict.id %}"
+                           class="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500">
+                            <i class="fas fa-eye mr-2"></i>View
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="bg-white p-8 rounded-lg shadow text-center">
+                <i class="fas fa-check-circle text-4xl text-green-500 mb-4"></i>
+                <p class="text-lg text-gray-600">No conflicts found matching your filters.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="mt-6 flex justify-center">
+            <nav class="flex gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&type={{ current_type }}&status={{ current_status }}"
+                   class="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    Previous
+                </a>
+                {% endif %}
+
+                <span class="px-3 py-2 bg-blue-600 text-white rounded-lg">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&type={{ current_type }}&status={{ current_status }}"
+                   class="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    Next
+                </a>
+                {% endif %}
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Bulk action functions
+function getSelectedConflicts() {
+    const checkboxes = document.querySelectorAll('.conflict-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+async function bulkAutoResolve() {
+    const conflictIds = getSelectedConflicts();
+    if (conflictIds.length === 0) {
+        alert('Please select conflicts to auto-resolve');
+        return;
+    }
+
+    if (!confirm(`Auto-resolve ${conflictIds.length} conflicts with high confidence matches?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('{% url "data_ingestion:bulk_resolve_conflicts" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: new URLSearchParams({
+                'action': 'auto_resolve',
+                'conflict_ids': conflictIds
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Error processing request');
+        console.error(error);
+    }
+}
+
+async function bulkMarkAsNew() {
+    const conflictIds = getSelectedConflicts();
+    if (conflictIds.length === 0) {
+        alert('Please select conflicts to mark as new');
+        return;
+    }
+
+    if (!confirm(`Mark ${conflictIds.length} conflicts as new records?`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch('{% url "data_ingestion:bulk_resolve_conflicts" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: new URLSearchParams({
+                'action': 'mark_as_new',
+                'conflict_ids': conflictIds
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (error) {
+        alert('Error processing request');
+        console.error(error);
+    }
+}
+
+// Select all checkbox functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Add select all checkbox if there are pending conflicts
+    const firstCheckbox = document.querySelector('.conflict-checkbox');
+    if (firstCheckbox) {
+        // Implementation for select all can be added here if needed
+    }
+});
+</script>
+{% endblock %}

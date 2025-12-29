@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ dashboard.name }} - Analytics Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .widget-container {
+        background: linear-gradient(135deg, rgba(30, 60, 114, 0.03), rgba(126, 63, 242, 0.03));
+        border: 1px solid rgba(30, 60, 114, 0.1);
+    }
+    .widget-header {
+        background: linear-gradient(135deg, #1e3c72, #2a5298);
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Header -->
+    <div class="flex justify-between items-start mb-6">
+        <div>
+            <div class="flex items-center space-x-3">
+                <a href="{% url 'analytics:dashboard_list' %}" class="text-gray-600 hover:text-navy-600">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h1 class="text-3xl font-bold text-navy-900">{{ dashboard.name }}</h1>
+                {% if dashboard.is_default %}
+                <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">Default</span>
+                {% endif %}
+            </div>
+            <p class="text-gray-600 mt-2">{{ dashboard.description }}</p>
+        </div>
+        <div class="flex space-x-2">
+            <button class="px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors">
+                <i class="fas fa-edit mr-2"></i>Edit
+            </button>
+            <button class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <i class="fas fa-share mr-2"></i>Share
+            </button>
+            <button class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <i class="fas fa-download mr-2"></i>Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Filters Bar -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-2">
+                    <label class="text-sm text-gray-600">Date Range:</label>
+                    <select class="px-3 py-1 border border-gray-300 rounded-lg text-sm">
+                        <option>Last 30 Days</option>
+                        <option>Last 90 Days</option>
+                        <option>Year to Date</option>
+                        <option>Custom Range</option>
+                    </select>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <label class="text-sm text-gray-600">Category:</label>
+                    <select class="px-3 py-1 border border-gray-300 rounded-lg text-sm">
+                        <option>All Categories</option>
+                        <option>Raw Materials</option>
+                        <option>Equipment</option>
+                        <option>Services</option>
+                    </select>
+                </div>
+            </div>
+            <button class="px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors text-sm">
+                <i class="fas fa-sync mr-2"></i>Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        {% for widget in dashboard.widgets.all %}
+        <div class="widget-container rounded-lg shadow-md overflow-hidden 
+            {% if widget.size == 'large' %}col-span-2{% elif widget.size == 'full' %}col-span-3{% endif %}">
+            <div class="widget-header px-4 py-3 flex justify-between items-center">
+                <h3 class="font-semibold">{{ widget.title }}</h3>
+                <button class="text-white/80 hover:text-white">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+            </div>
+            <div class="p-4 bg-white">
+                {% if widget.type == 'chart' %}
+                    <canvas id="chart-{{ widget.id }}" height="200"></canvas>
+                {% elif widget.type == 'metric' %}
+                    <div class="text-center py-8">
+                        <div class="text-4xl font-bold text-navy-900">{{ widget.value|default:"0" }}</div>
+                        <div class="text-sm text-gray-600 mt-2">{{ widget.subtitle }}</div>
+                    </div>
+                {% elif widget.type == 'table' %}
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2">Item</th>
+                                    <th class="text-right py-2">Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in widget.data %}
+                                <tr class="border-b">
+                                    <td class="py-2">{{ row.label }}</td>
+                                    <td class="text-right py-2">{{ row.value }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-8 text-gray-500">
+                        Widget type not supported
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-span-full text-center py-12">
+            <i class="fas fa-plus-circle text-6xl text-gray-300 mb-4"></i>
+            <p class="text-gray-500">No widgets configured</p>
+            <button class="mt-4 px-4 py-2 bg-navy-600 text-white rounded-lg hover:bg-navy-700 transition-colors">
+                Add Widget
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+// Initialize charts if any
+document.addEventListener('DOMContentLoaded', function() {
+    {% for widget in dashboard.widgets.all %}
+        {% if widget.type == 'chart' %}
+        // Initialize chart for widget {{ widget.id }}
+        const ctx{{ widget.id }} = document.getElementById('chart-{{ widget.id }}');
+        if (ctx{{ widget.id }}) {
+            new Chart(ctx{{ widget.id }}, {
+                type: '{{ widget.chart_type|default:"line" }}',
+                data: {{ widget.chart_data|safe|default:"{}" }},
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        {% endif %}
+    {% endfor %}
+});
+</script>
+{% endblock %}

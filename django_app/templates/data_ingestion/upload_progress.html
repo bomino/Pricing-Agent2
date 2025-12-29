@@ -1,0 +1,297 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Processing Upload{% endblock %}
+
+{% block extra_head %}
+<style>
+    .progress-ring {
+        transform: rotate(-90deg);
+    }
+    .progress-ring-circle {
+        transition: stroke-dashoffset 0.35s;
+        transform-origin: 50% 50%;
+    }
+    .pulse {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: .5; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Processing Upload</h1>
+            <p class="text-gray-600 mt-2">{{ upload.original_filename }}</p>
+        </div>
+
+        <!-- Main Progress Card -->
+        <div class="bg-white rounded-lg shadow-lg p-8">
+            <!-- Circular Progress -->
+            <div class="flex flex-col items-center mb-8">
+                <div class="relative">
+                    <svg class="progress-ring w-40 h-40">
+                        <circle
+                            class="text-gray-200"
+                            stroke-width="8"
+                            stroke="currentColor"
+                            fill="transparent"
+                            r="70"
+                            cx="80"
+                            cy="80"
+                        />
+                        <circle
+                            class="progress-ring-circle text-blue-600"
+                            stroke-width="8"
+                            stroke-dasharray="439.8"
+                            stroke-dashoffset="439.8"
+                            stroke-linecap="round"
+                            stroke="currentColor"
+                            fill="transparent"
+                            r="70"
+                            cx="80"
+                            cy="80"
+                            id="progress-circle"
+                        />
+                    </svg>
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <span class="text-3xl font-bold text-gray-900" id="progress-percent">0%</span>
+                    </div>
+                </div>
+
+                <!-- Status Text -->
+                <div class="mt-4 text-center">
+                    <p class="text-lg font-medium text-gray-900" id="status-text">Initializing...</p>
+                    <p class="text-sm text-gray-500 mt-1">
+                        <span id="current-count">0</span> / <span id="total-count">0</span> records processed
+                    </p>
+                </div>
+            </div>
+
+            <!-- Linear Progress Bar (backup visualization) -->
+            <div class="mb-6">
+                <div class="flex justify-between text-sm text-gray-600 mb-2">
+                    <span>Progress</span>
+                    <span id="time-elapsed">00:00</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-3">
+                    <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Processing Details -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                    <p class="text-2xl font-bold text-blue-600" id="suppliers-count">0</p>
+                    <p class="text-sm text-gray-600">Suppliers</p>
+                </div>
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                    <p class="text-2xl font-bold text-green-600" id="materials-count">0</p>
+                    <p class="text-sm text-gray-600">Materials</p>
+                </div>
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                    <p class="text-2xl font-bold text-purple-600" id="orders-count">0</p>
+                    <p class="text-sm text-gray-600">Orders</p>
+                </div>
+                <div class="text-center p-4 bg-gray-50 rounded-lg">
+                    <p class="text-2xl font-bold text-orange-600" id="prices-count">0</p>
+                    <p class="text-sm text-gray-600">Prices</p>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex justify-between">
+                <button id="cancel-btn" onclick="cancelProcessing()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                    <i class="fas fa-stop mr-2"></i>Cancel Processing
+                </button>
+                <button id="view-results-btn" onclick="viewResults()" class="hidden px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                    <i class="fas fa-check-circle mr-2"></i>View Results
+                </button>
+            </div>
+
+            <!-- Error Message -->
+            <div id="error-message" class="hidden mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p class="text-red-800 font-medium">Processing Error</p>
+                <p class="text-red-600 text-sm mt-1" id="error-text"></p>
+            </div>
+        </div>
+
+        <!-- Processing Log -->
+        <div class="mt-6 bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Processing Log</h3>
+            <div id="processing-log" class="space-y-2 max-h-64 overflow-y-auto">
+                <div class="text-sm text-gray-600 pulse">
+                    <i class="fas fa-circle text-blue-500 text-xs mr-2"></i>
+                    Starting upload processing...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const uploadId = '{{ upload.id }}';
+let startTime = Date.now();
+let pollInterval;
+let elapsedInterval;
+
+// Update elapsed time
+function updateElapsedTime() {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    document.getElementById('time-elapsed').textContent =
+        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Poll for progress updates
+async function pollProgress() {
+    try {
+        const response = await fetch(`/data-ingestion/api/progress/${uploadId}/`);
+        const data = await response.json();
+
+        if (data.state === 'PROGRESS') {
+            updateProgress(data);
+        } else if (data.state === 'SUCCESS') {
+            handleSuccess(data);
+        } else if (data.state === 'FAILURE') {
+            handleFailure(data);
+        }
+    } catch (error) {
+        console.error('Error polling progress:', error);
+    }
+}
+
+// Update progress display
+function updateProgress(data) {
+    const percent = data.percentage || 0;
+    const current = data.current || 0;
+    const total = data.total || 0;
+
+    // Update circular progress
+    const circle = document.getElementById('progress-circle');
+    const circumference = 439.8; // 2 * π * 70
+    const offset = circumference - (percent / 100) * circumference;
+    circle.style.strokeDashoffset = offset;
+
+    // Update text
+    document.getElementById('progress-percent').textContent = `${percent}%`;
+    document.getElementById('current-count').textContent = current;
+    document.getElementById('total-count').textContent = total;
+    document.getElementById('progress-bar').style.width = `${percent}%`;
+
+    // Update status
+    if (percent < 25) {
+        document.getElementById('status-text').textContent = 'Reading and validating data...';
+    } else if (percent < 50) {
+        document.getElementById('status-text').textContent = 'Matching suppliers and materials...';
+    } else if (percent < 75) {
+        document.getElementById('status-text').textContent = 'Creating purchase orders...';
+    } else {
+        document.getElementById('status-text').textContent = 'Recording price history...';
+    }
+
+    // Update counters if available
+    if (data.created_suppliers !== undefined) {
+        document.getElementById('suppliers-count').textContent = data.created_suppliers;
+    }
+    if (data.created_materials !== undefined) {
+        document.getElementById('materials-count').textContent = data.created_materials;
+    }
+    if (data.created_pos !== undefined) {
+        document.getElementById('orders-count').textContent = data.created_pos;
+    }
+    if (data.created_prices !== undefined) {
+        document.getElementById('prices-count').textContent = data.created_prices;
+    }
+
+    // Add log entry
+    addLogEntry(`Processing batch: ${current}/${total} records`);
+}
+
+// Handle successful completion
+function handleSuccess(data) {
+    clearInterval(pollInterval);
+    clearInterval(elapsedInterval);
+
+    // Update to 100%
+    updateProgress({ percentage: 100, current: data.total, total: data.total });
+
+    document.getElementById('status-text').textContent = 'Processing Complete!';
+    document.getElementById('status-text').classList.add('text-green-600');
+
+    // Show view results button, hide cancel
+    document.getElementById('cancel-btn').classList.add('hidden');
+    document.getElementById('view-results-btn').classList.remove('hidden');
+
+    addLogEntry('✅ Processing completed successfully!', 'text-green-600');
+}
+
+// Handle failure
+function handleFailure(data) {
+    clearInterval(pollInterval);
+    clearInterval(elapsedInterval);
+
+    document.getElementById('status-text').textContent = 'Processing Failed';
+    document.getElementById('status-text').classList.add('text-red-600');
+
+    // Show error message
+    document.getElementById('error-message').classList.remove('hidden');
+    document.getElementById('error-text').textContent = data.error || 'An unexpected error occurred';
+
+    document.getElementById('cancel-btn').textContent = 'Back to Dashboard';
+
+    addLogEntry('❌ Processing failed: ' + (data.error || 'Unknown error'), 'text-red-600');
+}
+
+// Add entry to processing log
+function addLogEntry(message, className = '') {
+    const log = document.getElementById('processing-log');
+    const entry = document.createElement('div');
+    entry.className = `text-sm text-gray-600 ${className}`;
+    entry.innerHTML = `<i class="fas fa-circle text-xs mr-2"></i>${message}`;
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+}
+
+// Cancel processing
+async function cancelProcessing() {
+    if (confirm('Are you sure you want to cancel processing?')) {
+        try {
+            await fetch(`/data-ingestion/api/cancel/${uploadId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+        } catch (error) {
+            console.error('Error canceling:', error);
+        }
+        window.location.href = '/data-ingestion/';
+    }
+}
+
+// View results
+function viewResults() {
+    window.location.href = `/data-ingestion/upload/${uploadId}/`;
+}
+
+// Start polling when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Start elapsed time counter
+    elapsedInterval = setInterval(updateElapsedTime, 1000);
+
+    // Start polling for progress
+    pollInterval = setInterval(pollProgress, 1000); // Poll every second
+
+    // Initial poll
+    pollProgress();
+});
+</script>
+{% endblock %}

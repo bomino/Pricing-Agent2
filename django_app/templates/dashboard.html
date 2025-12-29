@@ -1,0 +1,393 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Dashboard - AI Pricing Agent - VTX{% endblock %}
+
+{% block content %}
+<div class="p-6" data-page-init="initDashboard">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p class="text-gray-600 mt-1">Real-time procurement and pricing insights</p>
+    </div>
+    
+    <!-- Key Metrics -->
+    <div class="data-grid data-grid-4 mb-8">
+        {% include 'components/metric_card.html' with title="Total Spend (MTD)" value=metrics.total_spend_mtd format="currency" trend="up" trend_value="12.5" trend_label="vs last month" icon="dollar-sign" color="navy" %}
+        {% include 'components/metric_card.html' with title="Active RFQs" value=metrics.active_rfqs format="number" trend="neutral" trend_value="0" trend_label="active" icon="file-invoice" color="cyan" %}
+        {% include 'components/metric_card.html' with title="Active Suppliers" value=metrics.active_suppliers format="number" trend="up" trend_value=recent_activity.new_suppliers trend_label="new this week" icon="truck" color="teal" %}
+        {% include 'components/metric_card.html' with title="Cost Savings (YTD)" value=metrics.cost_savings_ytd format="percent" trend="up" trend_value=metrics.cost_savings_ytd trend_label="potential savings" icon="piggy-bank" color="emerald" %}
+    </div>
+    
+    
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Spending Trend Chart -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900">Spending Trend</h2>
+                <select class="form-input text-sm py-1" data-period-selector data-chart="spending">
+                    <option value="30">Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="365">Last 12 months</option>
+                </select>
+            </div>
+            <div class="h-64 chart-container">
+                <canvas id="spendingChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Category Breakdown -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900">Spend by Category</h2>
+                <button class="text-sm text-navy-600 hover:text-navy-700 font-medium">View all</button>
+            </div>
+            <div class="h-64 chart-container">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Additional Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Supplier Performance -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900">Supplier Performance</h2>
+                <button class="text-sm text-navy-600 hover:text-navy-700 font-medium" data-export-chart="supplier">
+                    <i class="fas fa-download mr-1"></i> Export
+                </button>
+            </div>
+            <div class="h-64 chart-container">
+                <canvas id="supplierChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Price Trends -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900">Material Price Trends</h2>
+                <select class="form-input text-sm py-1" data-period-selector data-chart="price">
+                    <option value="7">Last 7 days</option>
+                    <option value="30">Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                </select>
+            </div>
+            <div class="h-64 chart-container">
+                <canvas id="priceTrendChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tables and Lists -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Recent RFQs -->
+        <div class="lg:col-span-2 bg-white rounded-lg shadow">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-900">Recent RFQs</h2>
+                    <a href="/procurement/rfqs" class="text-sm text-navy-600 hover:text-navy-700 font-medium">
+                        View all <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>RFQ Number</th>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Deadline</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody hx-get="/api/dashboard/recent-rfqs/" 
+                           hx-trigger="load"
+                           hx-indicator="#rfq-loading">
+                        <tr>
+                            <td colspan="5" class="text-center py-8">
+                                <i id="rfq-loading" class="fas fa-spinner fa-spin text-gray-400"></i>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Price Alerts -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-900">Price Alerts</h2>
+                    <a href="/pricing/alerts" class="text-sm text-navy-600 hover:text-navy-700 font-medium">
+                        View all <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="p-6 space-y-4" 
+                 hx-get="/api/dashboard/price-alerts/"
+                 hx-trigger="load"
+                 hx-indicator="#alerts-loading">
+                <div class="text-center py-8">
+                    <i id="alerts-loading" class="fas fa-spinner fa-spin text-gray-400"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Parse chart data from Django context
+    const chartData = {
+        spending: {{ charts.spend_trend|safe }},
+        category: {{ charts.category_breakdown|safe }},
+        supplier: {{ charts.supplier_performance|safe }}
+    };
+    
+    // Store chart instances for updates
+    let spendingChart, categoryChart, supplierChart, priceTrendChart;
+    
+    // Initialize spending trend chart
+    const spendingCtx = document.getElementById('spendingChart');
+    if (spendingCtx && chartData.spending && chartData.spending.length > 0) {
+        spendingChart = new Chart(spendingCtx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: chartData.spending.map(d => d.date),
+                datasets: [{
+                    label: 'Daily Spend',
+                    data: chartData.spending.map(d => d.amount),
+                    borderColor: '#003366',
+                    backgroundColor: 'rgba(0, 51, 102, 0.1)',
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return '$' + context.parsed.y.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Initialize category breakdown chart
+    const categoryCtx = document.getElementById('categoryChart');
+    if (categoryCtx && chartData.category && chartData.category.length > 0) {
+        categoryChart = new Chart(categoryCtx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: chartData.category.map(d => d.category),
+                datasets: [{
+                    data: chartData.category.map(d => d.amount),
+                    backgroundColor: [
+                        '#003366',
+                        '#0066cc',
+                        '#3399ff',
+                        '#66b3ff',
+                        '#99ccff'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 15,
+                            font: { size: 11 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.label + ': $' + context.parsed.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Initialize supplier performance chart
+    const supplierCtx = document.getElementById('supplierChart');
+    if (supplierCtx && chartData.supplier && chartData.supplier.length > 0) {
+        supplierChart = new Chart(supplierCtx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: chartData.supplier.map(d => d.name),
+                datasets: [{
+                    label: 'Total Spend',
+                    data: chartData.supplier.map(d => d.spend),
+                    backgroundColor: '#003366',
+                    borderColor: '#002244',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return '$' + context.parsed.y.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Placeholder for price trend chart (needs material data)
+    const priceTrendCtx = document.getElementById('priceTrendChart');
+    if (priceTrendCtx) {
+        priceTrendChart = new Chart(priceTrendCtx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7'],
+                datasets: [{
+                    label: 'Average Price',
+                    data: [100, 102, 98, 105, 103, 107, 109],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return '$' + context.parsed.y.toFixed(2);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toFixed(0);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Add event listeners for period selectors
+    document.querySelectorAll('[data-period-selector]').forEach(selector => {
+        selector.addEventListener('change', function(e) {
+            const chartType = this.dataset.chart;
+            const period = this.value;
+            
+            // Fetch new data based on period
+            fetch(`/api/dashboard/chart-data/?chart=${chartType}&period=${period}`)
+                .then(response => response.json())
+                .then(data => {
+                    updateChart(chartType, data);
+                })
+                .catch(error => {
+                    console.error('Error fetching chart data:', error);
+                    // For now, show alert that this is demo data
+                    alert(`This would fetch ${period} days of ${chartType} data.\n\nNote: Currently showing demo data from your uploaded file (2022-2024).`);
+                });
+        });
+    });
+    
+    // Function to update charts with new data
+    function updateChart(chartType, newData) {
+        switch(chartType) {
+            case 'spending':
+                if (spendingChart && newData.labels && newData.values) {
+                    spendingChart.data.labels = newData.labels;
+                    spendingChart.data.datasets[0].data = newData.values;
+                    spendingChart.update();
+                }
+                break;
+            case 'price':
+                if (priceTrendChart && newData.labels && newData.values) {
+                    priceTrendChart.data.labels = newData.labels;
+                    priceTrendChart.data.datasets[0].data = newData.values;
+                    priceTrendChart.update();
+                }
+                break;
+        }
+    }
+    
+    // Add export functionality
+    document.querySelectorAll('[data-export-chart]').forEach(button => {
+        button.addEventListener('click', function(e) {
+            const chartType = this.dataset.exportChart;
+            let chart;
+            
+            switch(chartType) {
+                case 'supplier':
+                    chart = supplierChart;
+                    break;
+            }
+            
+            if (chart) {
+                // Convert chart to image and download
+                const url = chart.toBase64Image();
+                const link = document.createElement('a');
+                link.download = `${chartType}-chart.png`;
+                link.href = url;
+                link.click();
+            }
+        });
+    });
+</script>
+{% endblock %}

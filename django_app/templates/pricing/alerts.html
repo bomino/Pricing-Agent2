@@ -1,0 +1,379 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Price Alerts{% endblock %}
+
+{% block extra_head %}
+<style>
+    .navy-gradient {
+        background: linear-gradient(135deg, #243b53 0%, #334e68 100%);
+    }
+    .alert-active {
+        border-left: 4px solid #16a34a;
+    }
+    .alert-triggered {
+        border-left: 4px solid #dc2626;
+        background-color: #fef2f2;
+    }
+    .alert-resolved {
+        border-left: 4px solid #6b7280;
+        opacity: 0.7;
+    }
+    .alert-disabled {
+        border-left: 4px solid #d1d5db;
+        opacity: 0.5;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <!-- Page Header -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-navy-900">Price Alerts</h1>
+                <nav class="text-sm text-gray-600 mt-2">
+                    <a href="/" class="hover:text-navy-600">Dashboard</a>
+                    <span class="mx-2">/</span>
+                    <a href="#" class="hover:text-navy-600">Pricing</a>
+                    <span class="mx-2">/</span>
+                    <span class="text-navy-900">Alerts</span>
+                </nav>
+            </div>
+            <button onclick="showCreateAlertModal()" class="bg-navy-700 text-white px-4 py-2 rounded-lg hover:bg-navy-800 transition-colors">
+                <i class="fas fa-plus mr-2"></i>Create Alert
+            </button>
+        </div>
+    </div>
+
+    <!-- Alert Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Active Alerts</p>
+                    <p class="text-2xl font-bold text-green-600">{{ active_alerts|default:"0" }}</p>
+                </div>
+                <div class="bg-green-100 p-3 rounded-lg">
+                    <i class="fas fa-bell text-green-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Triggered Today</p>
+                    <p class="text-2xl font-bold text-red-600">{{ triggered_today|default:"0" }}</p>
+                </div>
+                <div class="bg-red-100 p-3 rounded-lg">
+                    <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Resolved</p>
+                    <p class="text-2xl font-bold text-gray-600">{{ resolved_alerts|default:"0" }}</p>
+                </div>
+                <div class="bg-gray-100 p-3 rounded-lg">
+                    <i class="fas fa-check-circle text-gray-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl shadow-sm p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Total Alerts</p>
+                    <p class="text-2xl font-bold text-navy-900">{{ total_alerts|default:"0" }}</p>
+                </div>
+                <div class="bg-navy-100 p-3 rounded-lg">
+                    <i class="fas fa-bell-slash text-navy-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Filters -->
+    <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-navy-900">My Alerts</h3>
+            <div class="flex space-x-2">
+                <button class="px-3 py-1 bg-navy-700 text-white rounded-lg text-sm">All</button>
+                <button class="px-3 py-1 bg-white text-navy-700 border border-navy-300 rounded-lg text-sm hover:bg-navy-50">Active</button>
+                <button class="px-3 py-1 bg-white text-navy-700 border border-navy-300 rounded-lg text-sm hover:bg-navy-50">Triggered</button>
+                <button class="px-3 py-1 bg-white text-navy-700 border border-navy-300 rounded-lg text-sm hover:bg-navy-50">Resolved</button>
+            </div>
+        </div>
+        
+        <!-- Alert List -->
+        <div class="space-y-4">
+            {% for alert in alerts %}
+            <div class="bg-white rounded-lg border {% if alert.status == 'active' %}alert-active{% elif alert.status == 'triggered' %}alert-triggered{% elif alert.status == 'resolved' %}alert-resolved{% else %}alert-disabled{% endif %} p-4 hover:shadow-md transition-all">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-3 mb-2">
+                            <h4 class="font-semibold text-navy-900">{{ alert.name }}</h4>
+                            {% if alert.status == 'active' %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Active</span>
+                            {% elif alert.status == 'triggered' %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">Triggered</span>
+                            {% elif alert.status == 'resolved' %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700">Resolved</span>
+                            {% else %}
+                            <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-500">Disabled</span>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                                <span class="text-gray-600">Material:</span>
+                                <span class="font-medium text-navy-900 block">{{ alert.material.name }}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Type:</span>
+                                <span class="font-medium text-navy-900 block">{{ alert.get_alert_type_display }}</span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Condition:</span>
+                                <span class="font-medium text-navy-900 block">
+                                    {{ alert.get_condition_type_display }} ${{ alert.threshold_value|floatformat:2 }}
+                                </span>
+                            </div>
+                            <div>
+                                <span class="text-gray-600">Last Triggered:</span>
+                                <span class="font-medium text-navy-900 block">
+                                    {% if alert.last_triggered %}
+                                    {{ alert.last_triggered|timesince }} ago
+                                    {% else %}
+                                    Never
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        {% if alert.status == 'triggered' %}
+                        <div class="mt-3 p-3 bg-red-50 rounded-lg">
+                            <p class="text-sm text-red-800">
+                                <i class="fas fa-exclamation-circle mr-2"></i>
+                                Alert triggered! Current price: $125.50 (threshold: $120.00)
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center space-x-2 ml-4">
+                        <button onclick="editAlert('{{ alert.id }}')" class="text-blue-600 hover:text-blue-800 p-2">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        {% if alert.status == 'active' %}
+                        <button onclick="pauseAlert('{{ alert.id }}')" class="text-amber-600 hover:text-amber-800 p-2">
+                            <i class="fas fa-pause"></i>
+                        </button>
+                        {% else %}
+                        <button onclick="activateAlert('{{ alert.id }}')" class="text-green-600 hover:text-green-800 p-2">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        {% endif %}
+                        <button onclick="deleteAlert('{{ alert.id }}')" class="text-red-600 hover:text-red-800 p-2">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
+                    <div class="flex items-center space-x-4">
+                        <span>
+                            <i class="fas fa-envelope {% if alert.email_notification %}text-green-500{% else %}text-gray-400{% endif %} mr-1"></i>
+                            Email
+                        </span>
+                        <span>
+                            <i class="fas fa-mobile-alt {% if alert.push_notification %}text-green-500{% else %}text-gray-400{% endif %} mr-1"></i>
+                            Push
+                        </span>
+                    </div>
+                    <span>Triggered {{ alert.trigger_count }} times</span>
+                </div>
+            </div>
+            {% empty %}
+            <div class="text-center py-12">
+                <i class="fas fa-bell-slash text-6xl text-gray-300 mb-4"></i>
+                <p class="text-gray-500 mb-4">No alerts configured</p>
+                <button onclick="showCreateAlertModal()" class="bg-navy-700 text-white px-6 py-2 rounded-lg hover:bg-navy-800">
+                    Create Your First Alert
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Recent Alert Activity -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div class="navy-gradient text-white px-6 py-4">
+            <h2 class="text-lg font-semibold">Recent Alert Activity</h2>
+        </div>
+        
+        <div class="divide-y divide-gray-200">
+            <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="bg-red-100 p-2 rounded-lg">
+                            <i class="fas fa-arrow-up text-red-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium text-navy-900">Steel Price Alert triggered</p>
+                            <p class="text-sm text-gray-500">Price exceeded $150/ton threshold</p>
+                        </div>
+                    </div>
+                    <span class="text-sm text-gray-500">5 minutes ago</span>
+                </div>
+            </div>
+            
+            <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="bg-green-100 p-2 rounded-lg">
+                            <i class="fas fa-check text-green-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium text-navy-900">Aluminum Price Alert resolved</p>
+                            <p class="text-sm text-gray-500">Price returned to normal range</p>
+                        </div>
+                    </div>
+                    <span class="text-sm text-gray-500">2 hours ago</span>
+                </div>
+            </div>
+            
+            <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="bg-amber-100 p-2 rounded-lg">
+                            <i class="fas fa-exclamation text-amber-600"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium text-navy-900">Anomaly detected in Plastic prices</p>
+                            <p class="text-sm text-gray-500">Unusual 15% spike detected</p>
+                        </div>
+                    </div>
+                    <span class="text-sm text-gray-500">5 hours ago</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Alert Modal -->
+<div id="createAlertModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-1/2 shadow-lg rounded-lg bg-white">
+        <div class="navy-gradient text-white px-6 py-4 -m-5 mb-4 rounded-t-lg">
+            <h3 class="text-lg font-bold">Create Price Alert</h3>
+        </div>
+        
+        <form class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-navy-700 mb-1">Alert Name</label>
+                <input type="text" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500" 
+                       placeholder="e.g., Steel price threshold">
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-navy-700 mb-1">Material</label>
+                    <select class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500">
+                        <option value="">Select material...</option>
+                        {% for material in materials %}
+                        <option value="{{ material.id }}">{{ material.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-navy-700 mb-1">Alert Type</label>
+                    <select class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500">
+                        <option value="threshold">Price Threshold</option>
+                        <option value="anomaly">Price Anomaly</option>
+                        <option value="trend">Price Trend</option>
+                        <option value="forecast">Price Forecast</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-navy-700 mb-1">Condition</label>
+                    <select class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500">
+                        <option value="above">Above</option>
+                        <option value="below">Below</option>
+                        <option value="change_percent">Change %</option>
+                        <option value="change_absolute">Change $</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-navy-700 mb-1">Threshold Value</label>
+                    <input type="number" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500" 
+                           placeholder="0.00">
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-navy-700 mb-2">Notification Preferences</label>
+                <div class="space-y-2">
+                    <label class="flex items-center">
+                        <input type="checkbox" checked class="mr-2 text-navy-600">
+                        <span class="text-sm">Email notifications</span>
+                    </label>
+                    <label class="flex items-center">
+                        <input type="checkbox" class="mr-2 text-navy-600">
+                        <span class="text-sm">Push notifications</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-2 pt-4">
+                <button type="button" onclick="closeCreateAlertModal()" 
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+                    Cancel
+                </button>
+                <button type="submit" class="px-4 py-2 bg-navy-700 text-white rounded-lg hover:bg-navy-800">
+                    Create Alert
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function showCreateAlertModal() {
+    document.getElementById('createAlertModal').classList.remove('hidden');
+}
+
+function closeCreateAlertModal() {
+    document.getElementById('createAlertModal').classList.add('hidden');
+}
+
+function editAlert(alertId) {
+    showToast('Opening alert editor...', 'info');
+}
+
+function pauseAlert(alertId) {
+    showToast('Alert paused', 'warning');
+}
+
+function activateAlert(alertId) {
+    showToast('Alert activated', 'success');
+}
+
+function deleteAlert(alertId) {
+    if (confirm('Are you sure you want to delete this alert?')) {
+        showToast('Alert deleted', 'error');
+    }
+}
+</script>
+{% endblock %}

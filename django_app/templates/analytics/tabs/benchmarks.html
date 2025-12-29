@@ -1,0 +1,384 @@
+<!-- Benchmarking Tab Content -->
+
+<!-- Performance Summary Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-trophy text-4xl text-yellow-500 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Performance Score</h4>
+            <p class="text-3xl font-bold text-yellow-600 mb-2">82/100</p>
+            <p class="text-sm text-gray-600">Above industry avg</p>
+            <div class="mt-4">
+                <button class="text-sm text-yellow-600 hover:text-yellow-700 font-medium"
+                        hx-get="/analytics/benchmarks/score-details/"
+                        hx-target="#modal-container">
+                    View Breakdown →
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-chart-bar text-4xl text-blue-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Industry Rank</h4>
+            <p class="text-3xl font-bold text-blue-600 mb-2">#12</p>
+            <p class="text-sm text-gray-600">Out of 87 peers</p>
+            <div class="mt-4">
+                <button class="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        hx-get="/analytics/benchmarks/peer-comparison/"
+                        hx-target="#modal-container">
+                    Compare Peers →
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-graduation-cap text-4xl text-indigo-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Maturity Level</h4>
+            <p class="text-3xl font-bold text-indigo-600 mb-2">3/5</p>
+            <p class="text-sm text-gray-600">Managed Stage</p>
+            <div class="mt-4">
+                <button class="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
+                        hx-get="/analytics/benchmarks/maturity-roadmap/"
+                        hx-target="#modal-container">
+                    View Roadmap →
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
+        <div class="text-center">
+            <i class="fas fa-arrow-trend-up text-4xl text-green-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">Improvement</h4>
+            <p class="text-3xl font-bold text-green-600 mb-2">+15%</p>
+            <p class="text-sm text-gray-600">YoY improvement</p>
+            <div class="mt-4">
+                <button class="text-sm text-green-600 hover:text-green-700 font-medium"
+                        hx-get="/analytics/benchmarks/trend-analysis/"
+                        hx-target="#modal-container">
+                    View Trends →
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Industry Benchmarking Table -->
+<div class="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+    <h3 class="text-lg font-semibold text-navy-900 mb-4">
+        <i class="fas fa-industry text-gray-600 mr-2"></i>
+        Industry Benchmarking Comparison
+    </h3>
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead>
+                <tr class="border-b bg-gray-50">
+                    <th class="text-left py-3 px-4 font-medium text-gray-700">Metric</th>
+                    <th class="text-center py-3 px-4 font-medium text-gray-700">Your Performance</th>
+                    <th class="text-center py-3 px-4 font-medium text-gray-700">Industry Average</th>
+                    <th class="text-center py-3 px-4 font-medium text-gray-700">Best in Class</th>
+                    <th class="text-center py-3 px-4 font-medium text-gray-700">Gap Analysis</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for bench in benchmarks %}
+                <tr class="border-b hover:bg-gray-50 transition-colors">
+                    <td class="py-4 px-4">
+                        <div class="flex items-center">
+                            <i class="fas fa-chart-bar text-gray-400 mr-2"></i>
+                            <span class="font-medium">{{ bench.metric }}</span>
+                        </div>
+                    </td>
+                    <td class="text-center py-4 px-4">
+                        <span class="font-semibold text-navy-900">{{ bench.your_value }}</span>
+                    </td>
+                    <td class="text-center py-4 px-4">
+                        <span class="text-gray-600">{{ bench.industry_avg }}</span>
+                    </td>
+                    <td class="text-center py-4 px-4">
+                        <span class="text-green-600 font-medium">{{ bench.best_in_class }}</span>
+                    </td>
+                    <td class="text-center py-4 px-4">
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium
+                            {% if bench.gap > 0 %}bg-green-100 text-green-700{% else %}bg-red-100 text-red-700{% endif %}">
+                            {% if bench.gap > 0 %}
+                                <i class="fas fa-arrow-up mr-1"></i>
+                            {% else %}
+                                <i class="fas fa-arrow-down mr-1"></i>
+                            {% endif %}
+                            {{ bench.gap|abs }}%
+                        </span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-8 text-gray-500">
+                        <i class="fas fa-database text-4xl mb-3"></i>
+                        <p>Benchmarking data will be available after more data collection</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Performance Analysis -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    <!-- Radar Chart -->
+    <div class="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 class="text-lg font-semibold text-navy-900 mb-4">
+            <i class="fas fa-spider text-purple-600 mr-2"></i>
+            Performance Radar
+        </h3>
+        <div class="h-64">
+            <canvas id="performanceRadarChart"></canvas>
+        </div>
+        <div class="mt-4 text-center">
+            <button class="btn btn-outline btn-sm"
+                    hx-get="/analytics/benchmarks/detailed-metrics/"
+                    hx-target="#modal-container">
+                View Detailed Metrics
+            </button>
+        </div>
+    </div>
+    
+    <!-- Peer Comparison -->
+    <div class="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 class="text-lg font-semibold text-navy-900 mb-4">
+            <i class="fas fa-users text-blue-600 mr-2"></i>
+            Peer Group Comparison
+        </h3>
+        <div class="mb-4">
+            <select class="form-select w-full"
+                    hx-get="/analytics/benchmarks/peer-update/"
+                    hx-target="#peer-comparison-chart"
+                    hx-trigger="change">
+                <option value="size">By Company Size</option>
+                <option value="industry">By Industry Segment</option>
+                <option value="region">By Geographic Region</option>
+                <option value="spend">By Annual Spend</option>
+            </select>
+        </div>
+        <div id="peer-comparison-chart" class="h-56">
+            <canvas id="peerComparisonChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Improvement Opportunities Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+    <div class="bg-white rounded-lg border border-yellow-200 p-4">
+        <div class="flex items-start">
+            <div class="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center mr-3">
+                <i class="fas fa-users text-yellow-600"></i>
+            </div>
+            <div class="flex-1">
+                <h4 class="font-semibold text-gray-900">Supplier Diversity</h4>
+                <p class="text-sm text-gray-600 mt-1">Currently at 18%, target is 25%</p>
+                <div class="mt-3">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-yellow-400 h-2 rounded-full" style="width: 72%"></div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">72% of target</p>
+                </div>
+                <button class="text-xs text-yellow-600 hover:text-yellow-700 mt-2">
+                    View Action Plan →
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-lg border border-orange-200 p-4">
+        <div class="flex items-start">
+            <div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center mr-3">
+                <i class="fas fa-check-circle text-orange-600"></i>
+            </div>
+            <div class="flex-1">
+                <h4 class="font-semibold text-gray-900">Order Accuracy</h4>
+                <p class="text-sm text-gray-600 mt-1">At 96%, target is 99%</p>
+                <div class="mt-3">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-orange-400 h-2 rounded-full" style="width: 97%"></div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">97% of best-in-class</p>
+                </div>
+                <button class="text-xs text-orange-600 hover:text-orange-700 mt-2">
+                    Improve Process →
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-lg border border-green-200 p-4">
+        <div class="flex items-start">
+            <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                <i class="fas fa-star text-green-600"></i>
+            </div>
+            <div class="flex-1">
+                <h4 class="font-semibold text-gray-900">First-Time Quality</h4>
+                <p class="text-sm text-gray-600 mt-1">At 92%, above average (88%)</p>
+                <div class="mt-3">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-green-400 h-2 rounded-full" style="width: 97%"></div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">97% of best-in-class</p>
+                </div>
+                <button class="text-xs text-green-600 hover:text-green-700 mt-2">
+                    Maintain Excellence →
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Maturity Assessment -->
+<div class="bg-white rounded-lg border border-gray-200 p-6">
+    <h3 class="text-lg font-semibold text-navy-900 mb-4">
+        <i class="fas fa-graduation-cap text-indigo-600 mr-2"></i>
+        Procurement Maturity Assessment
+    </h3>
+    
+    <div class="flex justify-between items-center mb-6">
+        <div class="flex-1">
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium text-gray-700">Overall Maturity Progress</span>
+                <span class="text-sm font-bold text-indigo-600">Level 3 - Managed</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-3">
+                <div class="bg-gradient-to-r from-indigo-400 to-indigo-600 h-3 rounded-full" style="width: 60%"></div>
+            </div>
+            <div class="flex justify-between mt-2 text-xs text-gray-600">
+                <span>Ad-hoc</span>
+                <span>Defined</span>
+                <span class="font-bold text-indigo-600">Managed</span>
+                <span>Optimized</span>
+                <span>Leading</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="p-4 bg-indigo-50 rounded-lg">
+            <h5 class="font-semibold text-gray-900 mb-2">Current Strengths</h5>
+            <ul class="space-y-1 text-sm text-gray-700">
+                <li class="flex items-start">
+                    <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
+                    Established procurement processes
+                </li>
+                <li class="flex items-start">
+                    <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
+                    Consistent execution across teams
+                </li>
+                <li class="flex items-start">
+                    <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
+                    Basic analytics capabilities
+                </li>
+            </ul>
+        </div>
+        
+        <div class="p-4 bg-blue-50 rounded-lg">
+            <h5 class="font-semibold text-gray-900 mb-2">Next Level Requirements</h5>
+            <ul class="space-y-1 text-sm text-gray-700">
+                <li class="flex items-start">
+                    <i class="fas fa-arrow-right text-blue-500 mr-2 mt-0.5"></i>
+                    Advanced analytics adoption
+                </li>
+                <li class="flex items-start">
+                    <i class="fas fa-arrow-right text-blue-500 mr-2 mt-0.5"></i>
+                    Supplier collaboration platform
+                </li>
+                <li class="flex items-start">
+                    <i class="fas fa-arrow-right text-blue-500 mr-2 mt-0.5"></i>
+                    Predictive procurement models
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Actions -->
+<div class="mt-6 flex justify-center gap-3">
+    <button class="btn btn-primary"
+            hx-get="/analytics/export/benchmarks/">
+        <i class="fas fa-download mr-2"></i>Export Benchmark Report
+    </button>
+    <button class="btn btn-outline"
+            hx-get="/analytics/benchmarks/settings/"
+            hx-target="#modal-container">
+        <i class="fas fa-cog mr-2"></i>Configure Benchmarks
+    </button>
+    <button class="btn btn-outline"
+            hx-get="/analytics/benchmarks/improvement-plan/"
+            hx-target="#modal-container">
+        <i class="fas fa-route mr-2"></i>Improvement Plan
+    </button>
+</div>
+
+<script>
+// Initialize benchmark charts after load
+document.addEventListener('DOMContentLoaded', function() {
+    // Performance Radar Chart
+    const radarCanvas = document.getElementById('performanceRadarChart');
+    if (radarCanvas && !radarCanvas.chartInstance) {
+        radarCanvas.chartInstance = new Chart(radarCanvas, {
+            type: 'radar',
+            data: {
+                labels: ['Cost', 'Quality', 'Delivery', 'Service', 'Innovation'],
+                datasets: [{
+                    label: 'Your Performance',
+                    data: [85, 92, 88, 78, 65],
+                    borderColor: '#003366',
+                    backgroundColor: 'rgba(0, 51, 102, 0.2)'
+                }, {
+                    label: 'Industry Average',
+                    data: [75, 88, 85, 80, 70],
+                    borderColor: '#6b7280',
+                    backgroundColor: 'rgba(107, 114, 128, 0.1)',
+                    borderDash: [5, 5]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+    
+    // Peer Comparison Chart
+    const peerCanvas = document.getElementById('peerComparisonChart');
+    if (peerCanvas && !peerCanvas.chartInstance) {
+        peerCanvas.chartInstance = new Chart(peerCanvas, {
+            type: 'bar',
+            data: {
+                labels: ['You', 'Peer A', 'Peer B', 'Peer C', 'Best'],
+                datasets: [{
+                    label: 'Overall Score',
+                    data: [82, 75, 88, 79, 91],
+                    backgroundColor: ['#003366', '#6b7280', '#6b7280', '#6b7280', '#22c55e']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+    }
+});
+</script>

@@ -1,0 +1,410 @@
+name: CD Pipeline
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+    branches: [main]
+  
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      force_deploy:
+        description: 'Force deployment even if tests fail'
+        type: boolean
+        default: false
+
+env:
+  KUSTOMIZE_VERSION: '5.0.3'
+  KUBECTL_VERSION: '1.28.0'
+  HELM_VERSION: '3.12.0'
+
+jobs:
+  # Deploy to staging environment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+    if: |
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
+    
+    outputs:
+      deployment-id: ${{ steps.deploy.outputs.deployment-id }}
+      django-version: ${{ steps.get-versions.outputs.django-version }}
+      fastapi-version: ${{ steps.get-versions.outputs.fastapi-version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Configure kubectl
+      run: |
+        curl -LO "https://dl.k8s.io/release/v${{ env.KUBECTL_VERSION }}/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+        aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name pricing-agent-staging
+
+    - name: Install Kustomize
+      run: |
+        curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+        sudo mv kustomize /usr/local/bin/
+
+    - name: Get latest image versions
+      id: get-versions
+      run: |
+        # Get latest successful build images from the CI workflow
+        DJANGO_VERSION=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "${{ github.api_url }}/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts" | \
+          jq -r '.artifacts[] | select(.name == "django-image-tag") | .archive_download_url')
+        
+        FASTAPI_VERSION=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "${{ github.api_url }}/repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/artifacts" | \
+          jq -r '.artifacts[] | select(.name == "fastapi-image-tag") | .archive_download_url')
+        
+        # Fallback to commit SHA if artifacts not found
+        if [[ -z "$DJANGO_VERSION" || "$DJANGO_VERSION" == "null" ]]; then
+          DJANGO_VERSION="main-${{ github.sha }}"
+        fi
+        if [[ -z "$FASTAPI_VERSION" || "$FASTAPI_VERSION" == "null" ]]; then
+          FASTAPI_VERSION="main-${{ github.sha }}"
+        fi
+        
+        echo "django-version=$DJANGO_VERSION" >> $GITHUB_OUTPUT
+        echo "fastapi-version=$FASTAPI_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Update Kubernetes manifests for staging
+      run: |
+        cd infrastructure/k8s/overlays/staging
+        
+        # Update image versions
+        kustomize edit set image \
+          django=your-registry.com/pricing-agent/django:${{ steps.get-versions.outputs.django-version }} \
+          fastapi=your-registry.com/pricing-agent/fastapi:${{ steps.get-versions.outputs.fastapi-version }}
+        
+        # Generate final manifests
+        kustomize build . > staging-manifests.yaml
+
+    - name: Deploy to staging namespace
+      id: deploy
+      run: |
+        # Create namespace if it doesn't exist
+        kubectl create namespace pricing-agent-staging --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Apply ConfigMaps and Secrets first
+        kubectl apply -f infrastructure/k8s/configmaps.yaml -n pricing-agent-staging
+        kubectl apply -f infrastructure/k8s/secrets.yaml -n pricing-agent-staging
+        
+        # Deploy database and Redis
+        kubectl apply -f infrastructure/k8s/postgres.yaml -n pricing-agent-staging
+        kubectl apply -f infrastructure/k8s/redis.yaml -n pricing-agent-staging
+        
+        # Wait for database to be ready
+        kubectl wait --for=condition=ready pod -l app=pricing-agent,component=postgres -n pricing-agent-staging --timeout=300s
+        kubectl wait --for=condition=ready pod -l app=pricing-agent,component=redis -n pricing-agent-staging --timeout=300s
+        
+        # Deploy application services
+        kubectl apply -f infrastructure/k8s/overlays/staging/staging-manifests.yaml -n pricing-agent-staging
+        
+        # Wait for deployments to be ready
+        kubectl rollout status deployment/pricing-django -n pricing-agent-staging --timeout=600s
+        kubectl rollout status deployment/pricing-fastapi -n pricing-agent-staging --timeout=600s
+        kubectl rollout status deployment/pricing-celery-worker -n pricing-agent-staging --timeout=600s
+        
+        # Get deployment ID for tracking
+        DEPLOYMENT_ID=$(date +%Y%m%d-%H%M%S)-${{ github.run_number }}
+        echo "deployment-id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+
+    - name: Run smoke tests
+      run: |
+        # Get staging ingress URL
+        STAGING_URL="https://staging.pricing-agent.yourdomain.com"
+        
+        # Basic health checks
+        curl -f $STAGING_URL/health/ || exit 1
+        curl -f $STAGING_URL/ml/health || exit 1
+        
+        # Run comprehensive smoke tests
+        python scripts/smoke_tests.py --url $STAGING_URL --environment staging
+
+    - name: Update deployment status
+      if: always()
+      run: |
+        STATUS=$([[ $? -eq 0 ]] && echo "success" || echo "failure")
+        
+        # Update GitHub deployment status
+        curl -X POST \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          "${{ github.api_url }}/repos/${{ github.repository }}/deployments" \
+          -d "{
+            \"ref\": \"${{ github.sha }}\",
+            \"environment\": \"staging\",
+            \"description\": \"Staging deployment ${{ steps.deploy.outputs.deployment-id }}\",
+            \"auto_merge\": false
+          }"
+
+    - name: Send Slack notification
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#pricing-agent-deployments'
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+        custom_payload: |
+          {
+            attachments: [{
+              color: '${{ job.status }}' === 'success' ? 'good' : 'danger',
+              title: 'Staging Deployment ${{ job.status }}',
+              fields: [
+                { title: 'Environment', value: 'Staging', short: true },
+                { title: 'Deployment ID', value: '${{ steps.deploy.outputs.deployment-id }}', short: true },
+                { title: 'Django Version', value: '${{ steps.get-versions.outputs.django-version }}', short: true },
+                { title: 'FastAPI Version', value: '${{ steps.get-versions.outputs.fastapi-version }}', short: true },
+                { title: 'URL', value: 'https://staging.pricing-agent.yourdomain.com', short: false }
+              ]
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Deploy to production (with approval)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    needs: [deploy-staging]
+    if: |
+      needs.deploy-staging.result == 'success' || 
+      (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Configure kubectl for production
+      run: |
+        curl -LO "https://dl.k8s.io/release/v${{ env.KUBECTL_VERSION }}/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+        aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name pricing-agent-production
+
+    - name: Install Helm
+      run: |
+        curl https://get.helm.sh/helm-v${{ env.HELM_VERSION }}-linux-amd64.tar.gz | tar xz
+        sudo mv linux-amd64/helm /usr/local/bin/
+
+    - name: Pre-deployment database backup
+      run: |
+        # Create database backup before deployment
+        kubectl exec -n pricing-agent deployment/pricing-postgres -- \
+          pg_dump -U pricing_user pricing_agent | \
+          gzip > backup-$(date +%Y%m%d-%H%M%S).sql.gz
+        
+        # Upload backup to S3
+        aws s3 cp backup-*.sql.gz s3://${{ secrets.BACKUP_S3_BUCKET }}/database-backups/
+
+    - name: Blue-Green Deployment Strategy
+      id: deploy-production
+      run: |
+        # Determine current active environment
+        CURRENT_ENV=$(kubectl get service pricing-agent-active -n pricing-agent -o jsonpath='{.spec.selector.version}' 2>/dev/null || echo "blue")
+        TARGET_ENV=$([[ "$CURRENT_ENV" == "blue" ]] && echo "green" || echo "blue")
+        
+        echo "Current environment: $CURRENT_ENV"
+        echo "Target environment: $TARGET_ENV"
+        echo "target-env=$TARGET_ENV" >> $GITHUB_OUTPUT
+        
+        # Deploy to target environment
+        helm upgrade --install pricing-agent-$TARGET_ENV ./helm/pricing-agent \
+          --namespace pricing-agent \
+          --values helm/pricing-agent/values-production.yaml \
+          --set image.django.tag=${{ needs.deploy-staging.outputs.django-version }} \
+          --set image.fastapi.tag=${{ needs.deploy-staging.outputs.fastapi-version }} \
+          --set deployment.version=$TARGET_ENV \
+          --wait --timeout=10m
+        
+        # Wait for new deployment to be ready
+        kubectl rollout status deployment/pricing-django-$TARGET_ENV -n pricing-agent --timeout=600s
+        kubectl rollout status deployment/pricing-fastapi-$TARGET_ENV -n pricing-agent --timeout=600s
+
+    - name: Run production health checks
+      run: |
+        # Test the new deployment before switching traffic
+        TARGET_ENV=${{ steps.deploy-production.outputs.target-env }}
+        
+        # Port forward to test directly
+        kubectl port-forward service/pricing-django-$TARGET_ENV 8080:8000 -n pricing-agent &
+        PF_PID=$!
+        sleep 5
+        
+        # Run comprehensive health checks
+        curl -f http://localhost:8080/health/ || { kill $PF_PID; exit 1; }
+        python scripts/production_health_check.py --url http://localhost:8080 || { kill $PF_PID; exit 1; }
+        
+        kill $PF_PID
+
+    - name: Switch traffic to new deployment
+      run: |
+        TARGET_ENV=${{ steps.deploy-production.outputs.target-env }}
+        
+        # Update active service to point to new deployment
+        kubectl patch service pricing-agent-active -n pricing-agent -p \
+          "{\"spec\":{\"selector\":{\"version\":\"$TARGET_ENV\"}}}"
+        
+        # Verify traffic switch
+        sleep 30
+        curl -f https://pricing-agent.yourdomain.com/health/ || exit 1
+
+    - name: Run post-deployment tests
+      run: |
+        # Run full integration tests against production
+        python scripts/production_integration_tests.py \
+          --url https://pricing-agent.yourdomain.com \
+          --timeout 300
+
+    - name: Clean up old deployment
+      run: |
+        TARGET_ENV=${{ steps.deploy-production.outputs.target-env }}
+        OLD_ENV=$([[ "$TARGET_ENV" == "blue" ]] && echo "green" || echo "blue")
+        
+        # Scale down old deployment after 5 minutes
+        sleep 300
+        kubectl scale deployment pricing-django-$OLD_ENV --replicas=0 -n pricing-agent
+        kubectl scale deployment pricing-fastapi-$OLD_ENV --replicas=0 -n pricing-agent
+
+    - name: Create GitHub release
+      if: github.ref == 'refs/heads/main'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ github.run_number }}-${{ github.sha }}
+        release_name: Production Release v${{ github.run_number }}
+        body: |
+          Production deployment completed successfully.
+          
+          **Deployment Details:**
+          - Django Image: ${{ needs.deploy-staging.outputs.django-version }}
+          - FastAPI Image: ${{ needs.deploy-staging.outputs.fastapi-version }}
+          - Environment: ${{ steps.deploy-production.outputs.target-env }}
+          - Commit: ${{ github.sha }}
+          
+          **Changes:**
+          ${{ github.event.head_commit.message }}
+        draft: false
+        prerelease: false
+
+    - name: Send production deployment notification
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#pricing-agent-production'
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+        custom_payload: |
+          {
+            attachments: [{
+              color: '${{ job.status }}' === 'success' ? 'good' : 'danger',
+              title: 'Production Deployment ${{ job.status }}',
+              fields: [
+                { title: 'Environment', value: '${{ steps.deploy-production.outputs.target-env }}', short: true },
+                { title: 'Django Version', value: '${{ needs.deploy-staging.outputs.django-version }}', short: true },
+                { title: 'FastAPI Version', value: '${{ needs.deploy-staging.outputs.fastapi-version }}', short: true },
+                { title: 'URL', value: 'https://pricing-agent.yourdomain.com', short: false }
+              ]
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Rollback capability
+  rollback-production:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    if: failure() && needs.deploy-production.result == 'failure'
+    needs: [deploy-production]
+    
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Configure kubectl
+      run: |
+        curl -LO "https://dl.k8s.io/release/v${{ env.KUBECTL_VERSION }}/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        sudo mv kubectl /usr/local/bin/
+        aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name pricing-agent-production
+
+    - name: Rollback to previous version
+      run: |
+        # Get previous active environment
+        CURRENT_ENV=$(kubectl get service pricing-agent-active -n pricing-agent -o jsonpath='{.spec.selector.version}')
+        ROLLBACK_ENV=$([[ "$CURRENT_ENV" == "blue" ]] && echo "green" || echo "blue")
+        
+        echo "Rolling back from $CURRENT_ENV to $ROLLBACK_ENV"
+        
+        # Scale up previous deployment
+        kubectl scale deployment pricing-django-$ROLLBACK_ENV --replicas=3 -n pricing-agent
+        kubectl scale deployment pricing-fastapi-$ROLLBACK_ENV --replicas=2 -n pricing-agent
+        
+        # Wait for rollback deployment to be ready
+        kubectl rollout status deployment/pricing-django-$ROLLBACK_ENV -n pricing-agent --timeout=300s
+        
+        # Switch traffic back
+        kubectl patch service pricing-agent-active -n pricing-agent -p \
+          "{\"spec\":{\"selector\":{\"version\":\"$ROLLBACK_ENV\"}}}"
+        
+        # Verify rollback
+        sleep 30
+        curl -f https://pricing-agent.yourdomain.com/health/ || exit 1
+
+    - name: Send rollback notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: warning
+        channel: '#pricing-agent-alerts'
+        custom_payload: |
+          {
+            attachments: [{
+              color: 'warning',
+              title: '🚨 Production Rollback Executed',
+              text: 'Production deployment failed and was automatically rolled back to previous version.',
+              fields: [
+                { title: 'Trigger', value: 'Automatic rollback due to deployment failure', short: false },
+                { title: 'Status', value: 'Traffic restored to previous version', short: true },
+                { title: 'Action Required', value: 'Investigate deployment failure', short: true }
+              ]
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

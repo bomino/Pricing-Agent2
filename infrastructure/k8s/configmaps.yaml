@@ -1,0 +1,265 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pricing-agent-config
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: config
+data:
+  # Django Configuration
+  DEBUG: "false"
+  ALLOWED_HOSTS: "pricing-agent.yourdomain.com,api.yourdomain.com"
+  DJANGO_SETTINGS_MODULE: "pricing_agent.settings.production"
+  
+  # Database Configuration
+  POSTGRES_DB: "pricing_agent"
+  POSTGRES_USER: "pricing_user"
+  
+  # Redis Configuration
+  REDIS_URL: "redis://pricing-redis:6379/0"
+  CELERY_BROKER_URL: "redis://pricing-redis:6379/0"
+  
+  # ML Service Configuration
+  ML_SERVICE_URL: "http://pricing-fastapi:8001"
+  USE_GPU: "false"
+  
+  # CORS Configuration
+  CORS_ALLOW_ALL_ORIGINS: "false"
+  ALLOWED_ORIGINS: "https://pricing-agent.yourdomain.com"
+  
+  # Session Configuration
+  SESSION_COOKIE_SECURE: "true"
+  CSRF_COOKIE_SECURE: "true"
+  SECURE_SSL_REDIRECT: "true"
+  SECURE_HSTS_SECONDS: "31536000"
+  
+  # Logging Configuration
+  LOG_LEVEL: "INFO"
+  
+  # Celery Configuration
+  CELERY_WORKER_CONCURRENCY: "4"
+  CELERY_WORKER_MAX_TASKS_PER_CHILD: "1000"
+  
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pricing-nginx-config
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: nginx
+data:
+  nginx.conf: |
+    worker_processes auto;
+    error_log /var/log/nginx/error.log warn;
+    pid /var/run/nginx.pid;
+    
+    events {
+        worker_connections 1024;
+        use epoll;
+        multi_accept on;
+    }
+    
+    http {
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+        
+        # Logging
+        log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for" '
+                        'rt=$request_time uct="$upstream_connect_time" '
+                        'uht="$upstream_header_time" urt="$upstream_response_time"';
+        
+        access_log /var/log/nginx/access.log main;
+        
+        # Performance
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+        server_tokens off;
+        
+        # Compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 10240;
+        gzip_proxied any;
+        gzip_comp_level 6;
+        gzip_types
+            text/plain
+            text/css
+            text/xml
+            text/javascript
+            application/javascript
+            application/json
+            image/svg+xml;
+        
+        # Rate limiting
+        limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+        limit_req_zone $binary_remote_addr zone=ml:10m rate=5r/s;
+        limit_req_zone $binary_remote_addr zone=auth:10m rate=1r/s;
+        
+        # Upstreams
+        upstream django_backend {
+            least_conn;
+            server pricing-django:8000 max_fails=3 fail_timeout=30s;
+            keepalive 32;
+        }
+        
+        upstream fastapi_backend {
+            least_conn;
+            server pricing-fastapi:8001 max_fails=3 fail_timeout=30s;
+            keepalive 16;
+        }
+        
+        server {
+            listen 80;
+            server_name _;
+            
+            # Security headers
+            add_header X-Frame-Options DENY;
+            add_header X-Content-Type-Options nosniff;
+            add_header X-XSS-Protection "1; mode=block";
+            add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload";
+            
+            # Health checks
+            location /health/ {
+                access_log off;
+                proxy_pass http://django_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # ML Service
+            location /ml/ {
+                limit_req zone=ml burst=10 nodelay;
+                rewrite ^/ml/(.*)$ /$1 break;
+                proxy_pass http://fastapi_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                proxy_connect_timeout 10s;
+                proxy_send_timeout 120s;
+                proxy_read_timeout 120s;
+                
+                # WebSocket support
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+            }
+            
+            # API routes
+            location /api/ {
+                limit_req zone=api burst=20 nodelay;
+                proxy_pass http://django_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # Auth routes
+            location ~ ^/(auth|accounts)/ {
+                limit_req zone=auth burst=3 nodelay;
+                proxy_pass http://django_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+            
+            # Default routes
+            location / {
+                proxy_pass http://django_backend;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+        }
+    }
+    
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pricing-postgres-config
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: postgres
+data:
+  postgresql.conf: |
+    # Connection Settings
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    
+    # Memory Settings
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+    
+    # Checkpoint Settings
+    checkpoint_timeout = 10min
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    
+    # Logging Settings
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = 'pg_log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_min_duration_statement = 1000
+    log_line_prefix = '%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+    
+    # TimescaleDB Settings
+    shared_preload_libraries = 'timescaledb'
+    max_worker_processes = 8
+    max_parallel_workers_per_gather = 2
+    max_parallel_workers = 8
+    
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pricing-redis-config
+  namespace: pricing-agent
+  labels:
+    app: pricing-agent
+    component: redis
+data:
+  redis.conf: |
+    # Network
+    bind 0.0.0.0
+    port 6379
+    timeout 0
+    
+    # General
+    daemonize no
+    loglevel notice
+    databases 16
+    
+    # Memory management
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # Security
+    requirepass redis_password_change_in_production
+    
+    # Performance
+    tcp-keepalive 300
+    tcp-backlog 511

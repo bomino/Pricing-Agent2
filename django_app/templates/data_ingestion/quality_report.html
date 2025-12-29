@@ -1,0 +1,328 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Data Quality Report - {{ upload.original_filename }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+    .grade-badge {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: white;
+    }
+    .grade-A { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+    .grade-B { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+    .grade-C { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .grade-D { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+    .grade-F { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); }
+
+    .dimension-card {
+        transition: transform 0.2s;
+    }
+    .dimension-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .recommendation-card {
+        border-left: 4px solid;
+    }
+    .priority-high { border-left-color: #ef4444; }
+    .priority-medium { border-left-color: #f59e0b; }
+    .priority-low { border-left-color: #3b82f6; }
+
+    .score-meter {
+        height: 8px;
+        border-radius: 4px;
+        background: #e5e7eb;
+        overflow: hidden;
+    }
+    .score-fill {
+        height: 100%;
+        transition: width 1s ease-out;
+    }
+    .score-excellent { background: linear-gradient(90deg, #10b981, #059669); }
+    .score-good { background: linear-gradient(90deg, #3b82f6, #2563eb); }
+    .score-fair { background: linear-gradient(90deg, #f59e0b, #d97706); }
+    .score-poor { background: linear-gradient(90deg, #ef4444, #dc2626); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Data Quality Report</h1>
+                    <p class="text-gray-600 mt-2">{{ upload.original_filename }} - {{ report.record_count }} records</p>
+                </div>
+                <a href="{% url 'data_ingestion:upload_detail' upload.id %}" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+                    <i class="fas fa-arrow-left mr-2"></i>Back to Upload
+                </a>
+            </div>
+        </div>
+
+        <!-- Overall Score Card -->
+        <div class="bg-white p-8 rounded-lg shadow-lg mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-900 mb-2">Overall Quality Score</h2>
+                    <div class="flex items-center gap-6">
+                        <div class="text-5xl font-bold
+                            {% if report.overall_score >= 90 %}text-green-600
+                            {% elif report.overall_score >= 80 %}text-blue-600
+                            {% elif report.overall_score >= 70 %}text-yellow-600
+                            {% elif report.overall_score >= 60 %}text-orange-600
+                            {% else %}text-red-600{% endif %}">
+                            {{ report.overall_score }}%
+                        </div>
+                        <div class="grade-badge grade-{{ report.grade }}">
+                            {{ report.grade }}
+                        </div>
+                    </div>
+                    <p class="text-gray-600 mt-2">
+                        {% if report.grade == 'A' %}Excellent data quality - ready for processing
+                        {% elif report.grade == 'B' %}Good data quality - minor improvements recommended
+                        {% elif report.grade == 'C' %}Fair data quality - review recommended issues
+                        {% elif report.grade == 'D' %}Poor data quality - significant corrections needed
+                        {% else %}Very poor data quality - major issues require attention{% endif %}
+                    </p>
+                </div>
+                <div class="w-64">
+                    <canvas id="qualityRadar"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dimension Scores -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {% for dimension, score in report.dimension_scores.items %}
+            <div class="dimension-card bg-white p-6 rounded-lg shadow">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-semibold text-gray-900 capitalize">{{ dimension }}</h3>
+                    <span class="text-2xl font-bold
+                        {% if score >= 90 %}text-green-600
+                        {% elif score >= 80 %}text-blue-600
+                        {% elif score >= 70 %}text-yellow-600
+                        {% elif score >= 60 %}text-orange-600
+                        {% else %}text-red-600{% endif %}">
+                        {{ score|floatformat:0 }}%
+                    </span>
+                </div>
+                <div class="score-meter">
+                    <div class="score-fill
+                        {% if score >= 90 %}score-excellent
+                        {% elif score >= 70 %}score-good
+                        {% elif score >= 50 %}score-fair
+                        {% else %}score-poor{% endif %}"
+                        style="width: {{ score }}%">
+                    </div>
+                </div>
+                <p class="text-sm text-gray-600 mt-2">
+                    {% if dimension == 'completeness' %}Measures presence of required fields
+                    {% elif dimension == 'consistency' %}Evaluates data pattern uniformity
+                    {% elif dimension == 'validity' %}Checks for valid value ranges
+                    {% elif dimension == 'timeliness' %}Assesses data recency
+                    {% elif dimension == 'uniqueness' %}Detects duplicate records
+                    {% elif dimension == 'accuracy' %}Compares with historical norms{% endif %}
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Detailed Findings -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Issues Found -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>Issues Detected
+                </h3>
+                <div class="space-y-3">
+                    {% for dimension, details in report.details.items %}
+                        {% if details.issues %}
+                            {% for issue in details.issues %}
+                            <div class="flex items-start gap-3">
+                                <i class="fas fa-circle text-red-400 text-xs mt-1"></i>
+                                <div>
+                                    <p class="text-sm text-gray-800">{{ issue }}</p>
+                                    <p class="text-xs text-gray-500">{{ dimension|capfirst }}</p>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if not report.details %}
+                    <p class="text-gray-500 text-sm">No major issues detected</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-chart-line text-blue-500 mr-2"></i>Key Metrics
+                </h3>
+                <div class="space-y-3">
+                    {% if report.details.completeness.field_completion %}
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Field Completeness</p>
+                        <div class="grid grid-cols-2 gap-2 mt-1">
+                            {% for field, pct in report.details.completeness.field_completion.items|slice:":4" %}
+                            <div class="text-xs">
+                                <span class="text-gray-600">{{ field|cut:"_"|capfirst }}:</span>
+                                <span class="font-medium {% if pct >= 90 %}text-green-600{% elif pct >= 70 %}text-yellow-600{% else %}text-red-600{% endif %}">
+                                    {{ pct|floatformat:0 }}%
+                                </span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if report.details.timeliness %}
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Data Timeline</p>
+                        <div class="text-xs text-gray-600">
+                            <p>Latest: {{ report.details.timeliness.latest_date }}</p>
+                            <p>Oldest: {{ report.details.timeliness.oldest_date }}</p>
+                            <p>Span: {{ report.details.timeliness.data_span_days }} days</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if report.details.uniqueness %}
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Duplicates</p>
+                        <p class="text-xs text-gray-600">
+                            {{ report.details.uniqueness.duplicate_records }} duplicate records
+                            ({{ report.details.uniqueness.duplicate_percentage }}%)
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recommendations -->
+        {% if report.recommendations %}
+        <div class="bg-white p-6 rounded-lg shadow">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>Recommendations
+            </h3>
+            <div class="space-y-3">
+                {% for rec in report.recommendations %}
+                <div class="recommendation-card p-4 bg-gray-50 rounded priority-{{ rec.priority }}">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="px-2 py-1 text-xs rounded-full
+                            {% if rec.priority == 'high' %}bg-red-100 text-red-700
+                            {% elif rec.priority == 'medium' %}bg-yellow-100 text-yellow-700
+                            {% else %}bg-blue-100 text-blue-700{% endif %}">
+                            {{ rec.priority|capfirst }} Priority
+                        </span>
+                        <span class="text-xs text-gray-500">{{ rec.category|capfirst }}</span>
+                    </div>
+                    <p class="text-sm text-gray-800 font-medium">{{ rec.message }}</p>
+                    <p class="text-xs text-gray-600 mt-1">
+                        <i class="fas fa-arrow-right mr-1"></i>{{ rec.action }}
+                    </p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Action Buttons -->
+        <div class="mt-6 flex gap-4">
+            {% if report.overall_score >= 70 %}
+            <a href="{% url 'data_ingestion:process_upload' upload.id %}"
+               class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                <i class="fas fa-check-circle mr-2"></i>Proceed with Processing
+            </a>
+            {% endif %}
+
+            {% if report.overall_score < 90 and report.overall_score >= 60 %}
+            <a href="{% url 'data_ingestion:validation' upload.id %}"
+               class="px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">
+                <i class="fas fa-edit mr-2"></i>Review & Fix Issues
+            </a>
+            {% endif %}
+
+            <button onclick="downloadReport()" class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                <i class="fas fa-download mr-2"></i>Download Report
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Radar chart for dimension scores
+const ctx = document.getElementById('qualityRadar').getContext('2d');
+const dimensionScores = {{ dimension_scores_json|safe }};
+
+new Chart(ctx, {
+    type: 'radar',
+    data: {
+        labels: Object.keys(dimensionScores).map(k => k.charAt(0).toUpperCase() + k.slice(1)),
+        datasets: [{
+            label: 'Quality Score',
+            data: Object.values(dimensionScores),
+            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+            borderColor: 'rgba(59, 130, 246, 1)',
+            borderWidth: 2,
+            pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+            r: {
+                beginAtZero: true,
+                max: 100,
+                ticks: {
+                    stepSize: 20
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+// Animate score fills on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const fills = document.querySelectorAll('.score-fill');
+    fills.forEach(fill => {
+        const width = fill.style.width;
+        fill.style.width = '0%';
+        setTimeout(() => {
+            fill.style.width = width;
+        }, 100);
+    });
+});
+
+// Download report function
+function downloadReport() {
+    const reportData = {{ report|safe }};
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `quality-report-${reportData.upload_id}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}

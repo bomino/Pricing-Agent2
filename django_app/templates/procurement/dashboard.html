@@ -1,0 +1,415 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Procurement Dashboard - AI Pricing Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    .metric-card {
+        transition: all 0.3s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .trend-up { color: #10b981; }
+    .trend-down { color: #ef4444; }
+    .trend-neutral { color: #6b7280; }
+    
+    .activity-item {
+        border-left: 2px solid #e5e7eb;
+        transition: all 0.2s;
+    }
+    .activity-item:hover {
+        border-left-color: #1e3a8a;
+        background: #f9fafb;
+    }
+    
+    .quick-action-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .quick-action-card:hover {
+        transform: scale(1.05);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Dashboard Header -->
+    <div class="mb-8">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Procurement Dashboard</h1>
+                <p class="mt-2 text-sm text-gray-600">Welcome back! Here's your procurement overview</p>
+            </div>
+            <div class="flex space-x-3">
+                <select class="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-navy-500 focus:border-navy-500">
+                    <option>Last 30 Days</option>
+                    <option>Last Quarter</option>
+                    <option>Year to Date</option>
+                    <option>All Time</option>
+                </select>
+                <button onclick="refreshDashboard()" class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50">
+                    <i class="fas fa-sync-alt mr-2"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Total Spend -->
+        <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-3 bg-blue-100 rounded-full">
+                    <i class="fas fa-dollar-sign text-blue-600 text-xl"></i>
+                </div>
+                <span class="trend-up text-sm font-medium">
+                    <i class="fas fa-arrow-up mr-1"></i> 12%
+                </span>
+            </div>
+            <h3 class="text-sm font-medium text-gray-600">Total Spend</h3>
+            <p class="text-2xl font-bold text-gray-900 mt-1">${{ metrics.total_spend|floatformat:0|default:"2.4M" }}</p>
+            <p class="text-xs text-gray-500 mt-2">vs. last period: +$285K</p>
+        </div>
+
+        <!-- Active RFQs -->
+        <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-3 bg-green-100 rounded-full">
+                    <i class="fas fa-file-alt text-green-600 text-xl"></i>
+                </div>
+                <span class="trend-neutral text-sm font-medium">
+                    <i class="fas fa-minus mr-1"></i> 0%
+                </span>
+            </div>
+            <h3 class="text-sm font-medium text-gray-600">Active RFQs</h3>
+            <p class="text-2xl font-bold text-gray-900 mt-1">{{ metrics.active_rfqs|default:24 }}</p>
+            <p class="text-xs text-gray-500 mt-2">{{ metrics.pending_quotes|default:8 }} awaiting responses</p>
+        </div>
+
+        <!-- Cost Savings -->
+        <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-3 bg-purple-100 rounded-full">
+                    <i class="fas fa-piggy-bank text-purple-600 text-xl"></i>
+                </div>
+                <span class="trend-up text-sm font-medium">
+                    <i class="fas fa-arrow-up mr-1"></i> 18%
+                </span>
+            </div>
+            <h3 class="text-sm font-medium text-gray-600">Cost Savings</h3>
+            <p class="text-2xl font-bold text-gray-900 mt-1">${{ metrics.cost_savings|floatformat:0|default:"145K" }}</p>
+            <p class="text-xs text-gray-500 mt-2">6.2% of total spend</p>
+        </div>
+
+        <!-- Supplier Performance -->
+        <div class="metric-card bg-white rounded-lg shadow-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-3 bg-orange-100 rounded-full">
+                    <i class="fas fa-star text-orange-600 text-xl"></i>
+                </div>
+                <span class="trend-up text-sm font-medium">
+                    <i class="fas fa-arrow-up mr-1"></i> 5%
+                </span>
+            </div>
+            <h3 class="text-sm font-medium text-gray-600">Avg Supplier Rating</h3>
+            <p class="text-2xl font-bold text-gray-900 mt-1">4.3<span class="text-lg text-gray-500">/5</span></p>
+            <p class="text-xs text-gray-500 mt-2">{{ metrics.total_suppliers|default:156 }} active suppliers</p>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="mb-8">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div onclick="window.location.href='{% url 'procurement:rfq_create' %}'" 
+                 class="quick-action-card bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-6 text-white text-center">
+                <i class="fas fa-plus-circle text-3xl mb-3"></i>
+                <p class="font-semibold">Create RFQ</p>
+            </div>
+            <div onclick="window.location.href='{% url 'procurement:supplier_create' %}'" 
+                 class="quick-action-card bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-6 text-white text-center">
+                <i class="fas fa-user-plus text-3xl mb-3"></i>
+                <p class="font-semibold">Add Supplier</p>
+            </div>
+            <div onclick="window.location.href='{% url 'procurement:quote_comparison' %}'" 
+                 class="quick-action-card bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-6 text-white text-center">
+                <i class="fas fa-balance-scale text-3xl mb-3"></i>
+                <p class="font-semibold">Compare Quotes</p>
+            </div>
+            <div onclick="window.location.href='{% url 'procurement:supplier_performance' %}'" 
+                 class="quick-action-card bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg p-6 text-white text-center">
+                <i class="fas fa-chart-line text-3xl mb-3"></i>
+                <p class="font-semibold">Analytics</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column - Charts -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Spend Trend Chart -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900">Spend Trend</h2>
+                    <div class="flex space-x-2">
+                        <button class="px-3 py-1 text-xs bg-navy-100 text-navy-700 rounded">Monthly</button>
+                        <button class="px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Weekly</button>
+                        <button class="px-3 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded">Daily</button>
+                    </div>
+                </div>
+                <div class="h-64">
+                    <canvas id="spendTrendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent RFQs -->
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-gray-900">Recent RFQs</h2>
+                    <a href="{% url 'procurement:rfq_list' %}" class="text-sm text-navy-600 hover:text-navy-800">
+                        View All <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RFQ Number</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Title</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Deadline</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quotes</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for rfq in recent_rfqs %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-navy-600">
+                                    <a href="{% url 'procurement:rfq_detail' rfq.id %}">{{ rfq.rfq_number }}</a>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900">{{ rfq.title|truncatewords:5 }}</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 py-1 text-xs rounded-full 
+                                        {% if rfq.status == 'open' %}bg-green-100 text-green-800
+                                        {% elif rfq.status == 'draft' %}bg-gray-100 text-gray-800
+                                        {% elif rfq.status == 'closed' %}bg-red-100 text-red-800
+                                        {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                        {{ rfq.get_status_display }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ rfq.deadline|date:"M d" }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ rfq.quotes.count }}/{{ rfq.invited_suppliers.count }}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="px-6 py-4 text-center text-gray-500">No recent RFQs</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Category Spend Distribution -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Spend by Category</h2>
+                <div class="h-64">
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Activity & Alerts -->
+        <div class="space-y-6">
+            <!-- Pending Actions -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Pending Actions</h2>
+                <div class="space-y-3">
+                    <div class="flex items-center p-3 bg-yellow-50 rounded-lg">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-exclamation-circle text-yellow-600"></i>
+                        </div>
+                        <div class="ml-3 flex-1">
+                            <p class="text-sm font-medium text-gray-900">5 Quotes Awaiting Review</p>
+                            <p class="text-xs text-gray-500">Review before deadline</p>
+                        </div>
+                        <a href="{% url 'procurement:quote_list' %}" class="text-yellow-600 hover:text-yellow-800">
+                            <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
+                    
+                    <div class="flex items-center p-3 bg-blue-50 rounded-lg">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-clock text-blue-600"></i>
+                        </div>
+                        <div class="ml-3 flex-1">
+                            <p class="text-sm font-medium text-gray-900">3 RFQs Expiring Soon</p>
+                            <p class="text-xs text-gray-500">Within next 48 hours</p>
+                        </div>
+                        <a href="{% url 'procurement:rfq_list' %}" class="text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
+                    
+                    <div class="flex items-center p-3 bg-green-50 rounded-lg">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-user-check text-green-600"></i>
+                        </div>
+                        <div class="ml-3 flex-1">
+                            <p class="text-sm font-medium text-gray-900">2 New Supplier Applications</p>
+                            <p class="text-xs text-gray-500">Pending approval</p>
+                        </div>
+                        <a href="{% url 'procurement:supplier_list' %}" class="text-green-600 hover:text-green-800">
+                            <i class="fas fa-arrow-right"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h2>
+                <div class="space-y-3">
+                    {% for activity in recent_activities %}
+                    <div class="activity-item pl-4 py-2">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0">
+                                <div class="w-2 h-2 bg-navy-600 rounded-full mt-2"></div>
+                            </div>
+                            <div class="ml-3 flex-1">
+                                <p class="text-sm text-gray-900">{{ activity.description }}</p>
+                                <p class="text-xs text-gray-500">{{ activity.timestamp|timesince }} ago</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-sm text-gray-500">No recent activity</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Top Suppliers -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900">Top Suppliers</h2>
+                    <a href="{% url 'procurement:supplier_performance' %}" class="text-sm text-navy-600 hover:text-navy-800">
+                        View All
+                    </a>
+                </div>
+                <div class="space-y-3">
+                    {% for supplier in top_suppliers %}
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <div class="w-10 h-10 bg-navy-100 rounded-full flex items-center justify-center">
+                                <span class="text-xs font-bold text-navy-600">{{ supplier.name|slice:":2"|upper }}</span>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900">{{ supplier.name }}</p>
+                                <div class="flex items-center">
+                                    <div class="flex text-yellow-400 text-xs">
+                                        {% for i in "12345"|make_list %}
+                                            {% if forloop.counter <= supplier.rating %}
+                                                <i class="fas fa-star"></i>
+                                            {% else %}
+                                                <i class="far fa-star"></i>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                    <span class="ml-1 text-xs text-gray-500">{{ supplier.rating|floatformat:1 }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="text-sm font-semibold text-gray-900">${{ supplier.total_value|floatformat:0 }}K</span>
+                    </div>
+                    {% empty %}
+                    <p class="text-sm text-gray-500">No supplier data available</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Spend Trend Chart
+const spendCtx = document.getElementById('spendTrendChart').getContext('2d');
+new Chart(spendCtx, {
+    type: 'line',
+    data: {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        datasets: [{
+            label: 'Monthly Spend',
+            data: [320000, 380000, 350000, 420000, 390000, 450000],
+            borderColor: '#1e3a8a',
+            backgroundColor: 'rgba(30, 58, 138, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return '$' + (value/1000) + 'K';
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Category Chart
+const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+new Chart(categoryCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['Raw Materials', 'Equipment', 'Services', 'Supplies', 'Other'],
+        datasets: [{
+            data: [35, 25, 20, 15, 5],
+            backgroundColor: [
+                '#1e3a8a',
+                '#3b82f6',
+                '#60a5fa',
+                '#93c5fd',
+                '#dbeafe'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+
+function refreshDashboard() {
+    location.reload();
+}
+</script>
+{% endblock %}

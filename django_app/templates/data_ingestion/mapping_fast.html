@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Quick Column Mapping - {{ upload.filename }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="mappingApp()">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-navy-900">Map Your Columns</h1>
+        <p class="text-gray-600 mt-1">{{ upload.filename }} • {{ upload.total_rows }} rows</p>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="mb-4 flex gap-2">
+        <button @click="autoMap()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            <i class="fas fa-magic mr-2"></i>Auto-Map
+        </button>
+        <button @click="clearAll()" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">
+            <i class="fas fa-times mr-2"></i>Clear All
+        </button>
+    </div>
+
+    <!-- Mapping Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Source Columns -->
+        <div class="bg-white rounded-lg shadow p-4">
+            <h3 class="font-semibold mb-3">Your Columns</h3>
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+                {% for col in columns %}
+                <div class="p-2 bg-gray-50 rounded border cursor-pointer hover:bg-blue-50"
+                     @click="selectColumn('{{ col|escapejs }}')">
+                    <span class="font-mono text-sm">{{ col }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Target Fields -->
+        <div class="bg-white rounded-lg shadow p-4">
+            <h3 class="font-semibold mb-3">Map To Fields</h3>
+            <div class="space-y-2">
+                {% for field in target_fields %}
+                <div class="p-3 border rounded" :class="mappings['{{ field.name }}'] ? 'bg-green-50 border-green-300' : 'bg-gray-50'">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <span class="font-medium">{{ field.name }}</span>
+                            {% if field.required %}<span class="text-red-500">*</span>{% endif %}
+                            <p class="text-xs text-gray-500">{{ field.description }}</p>
+                        </div>
+                        <select x-model="mappings['{{ field.name }}']" class="text-sm border rounded px-2 py-1">
+                            <option value="">-- Select Column --</option>
+                            {% for col in columns %}
+                            <option value="{{ col }}">{{ col }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Table (Minimal) -->
+    {% if preview_data %}
+    <div class="mt-6 bg-white rounded-lg shadow p-4">
+        <h3 class="font-semibold mb-3">Data Preview (First 3 Rows)</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        {% for col in columns|slice:":5" %}
+                        <th class="px-2 py-1 text-left">{{ col|truncatechars:20 }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in preview_data %}
+                    <tr class="border-t">
+                        {% for col in columns|slice:":5" %}
+                        <td class="px-2 py-1">{{ row|get_item:col|default:''|truncatechars:30 }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Submit -->
+    <div class="mt-6 flex justify-end gap-3">
+        <a href="/data-ingestion/" class="px-6 py-2 border border-gray-300 rounded hover:bg-gray-50">
+            Cancel
+        </a>
+        <button @click="saveMappings()" 
+                :disabled="!isValid()"
+                class="px-6 py-2 bg-navy-600 text-white rounded hover:bg-navy-700 disabled:opacity-50">
+            <span x-show="!saving">Save & Process</span>
+            <span x-show="saving"><i class="fas fa-spinner fa-spin mr-2"></i>Saving...</span>
+        </button>
+    </div>
+</div>
+
+<script>
+function mappingApp() {
+    return {
+        mappings: {{ suggested_mappings|default:'{}'|safe }},
+        selectedColumn: null,
+        saving: false,
+        
+        selectColumn(col) {
+            this.selectedColumn = col;
+        },
+        
+        autoMap() {
+            // Simple auto-mapping
+            const columns = {{ columns|safe }};
+            const fields = {{ target_fields|safe }};
+            
+            fields.forEach(field => {
+                const fieldName = field.name.toLowerCase();
+                const match = columns.find(col => {
+                    const colLower = col.toLowerCase();
+                    return colLower.includes(fieldName) || 
+                           fieldName.includes(colLower) ||
+                           this.fuzzyMatch(colLower, fieldName);
+                });
+                if (match) {
+                    this.mappings[field.name] = match;
+                }
+            });
+        },
+        
+        fuzzyMatch(str1, str2) {
+            // Simple fuzzy matching
+            const common = ['_', '-', ' ', '.'];
+            const clean1 = common.reduce((s, c) => s.replace(c, ''), str1);
+            const clean2 = common.reduce((s, c) => s.replace(c, ''), str2);
+            return clean1.includes(clean2) || clean2.includes(clean1);
+        },
+        
+        clearAll() {
+            this.mappings = {};
+        },
+        
+        isValid() {
+            // Check required fields are mapped
+            const required = {{ target_fields|safe }}.filter(f => f.required);
+            return required.every(f => this.mappings[f.name]);
+        },
+        
+        async saveMappings() {
+            if (!this.isValid()) {
+                alert('Please map all required fields');
+                return;
+            }
+            
+            this.saving = true;
+            
+            try {
+                const response = await fetch(window.location.href, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify(this.mappings)
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = '/data-ingestion/';
+                } else {
+                    alert('Error saving mappings');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                this.saving = false;
+            }
+        }
+    }
+}
+</script>
+
+<style>
+/* Minimal critical CSS */
+.max-h-96 { max-height: 24rem; }
+</style>
+{% endblock %}

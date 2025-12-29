@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ report.title }} - Report{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-section {
+        background: linear-gradient(135deg, rgba(30, 60, 114, 0.02), rgba(126, 63, 242, 0.02));
+        border-left: 3px solid;
+        border-image: linear-gradient(135deg, #1e3c72, #7e3ff2) 1;
+    }
+    .download-btn {
+        background: linear-gradient(135deg, #1e3c72, #2a5298);
+    }
+    .download-btn:hover {
+        background: linear-gradient(135deg, #2a5298, #3a62a8);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Header -->
+    <div class="flex justify-between items-start mb-6">
+        <div>
+            <div class="flex items-center space-x-3">
+                <a href="{% url 'analytics:report_list' %}" class="text-gray-600 hover:text-navy-600">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h1 class="text-3xl font-bold text-navy-900">{{ report.title }}</h1>
+                <span class="px-3 py-1 rounded-full text-xs
+                    {% if report.status == 'completed' %}bg-green-100 text-green-800
+                    {% elif report.status == 'processing' %}bg-yellow-100 text-yellow-800
+                    {% elif report.status == 'failed' %}bg-red-100 text-red-800
+                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                    {{ report.get_status_display|default:report.status|title }}
+                </span>
+            </div>
+            <div class="mt-2 flex items-center space-x-4 text-sm text-gray-600">
+                <span><i class="fas fa-calendar mr-1"></i>{{ report.created_at|date:"M d, Y g:i A" }}</span>
+                <span><i class="fas fa-user mr-1"></i>{{ report.created_by.get_full_name|default:report.created_by.username }}</span>
+                <span><i class="fas fa-clock mr-1"></i>{{ report.execution_time|default:"0" }}s</span>
+            </div>
+        </div>
+        <div class="flex space-x-2">
+            {% if report.status == 'completed' %}
+            <button class="download-btn px-4 py-2 text-white rounded-lg transition-all">
+                <i class="fas fa-download mr-2"></i>Download PDF
+            </button>
+            <button class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <i class="fas fa-file-excel mr-2"></i>Export Excel
+            </button>
+            {% endif %}
+            <button class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                <i class="fas fa-share mr-2"></i>Share
+            </button>
+        </div>
+    </div>
+
+    <!-- Report Info Card -->
+    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+                <label class="text-sm text-gray-600">Report Type</label>
+                <p class="font-semibold text-navy-900">{{ report.report_type|title }}</p>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Date Range</label>
+                <p class="font-semibold text-navy-900">
+                    {{ report.start_date|date:"M d, Y" }} - {{ report.end_date|date:"M d, Y" }}
+                </p>
+            </div>
+            <div>
+                <label class="text-sm text-gray-600">Format</label>
+                <p class="font-semibold text-navy-900">{{ report.format|upper }}</p>
+            </div>
+        </div>
+        {% if report.description %}
+        <div class="mt-4 pt-4 border-t">
+            <label class="text-sm text-gray-600">Description</label>
+            <p class="mt-1 text-gray-800">{{ report.description }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if report.status == 'completed' %}
+    <!-- Report Content -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        {% if report.content %}
+            <!-- Executive Summary -->
+            {% if report.content.summary %}
+            <div class="report-section mb-6 pl-4">
+                <h2 class="text-xl font-bold text-navy-900 mb-4">Executive Summary</h2>
+                <div class="prose max-w-none text-gray-700">
+                    {{ report.content.summary|linebreaks }}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Key Metrics -->
+            {% if report.content.metrics %}
+            <div class="report-section mb-6 pl-4">
+                <h2 class="text-xl font-bold text-navy-900 mb-4">Key Metrics</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {% for metric in report.content.metrics %}
+                    <div class="bg-gradient-to-br from-navy-50 to-purple-50 rounded-lg p-4">
+                        <div class="text-2xl font-bold text-navy-900">{{ metric.value }}</div>
+                        <div class="text-sm text-gray-600 mt-1">{{ metric.label }}</div>
+                        {% if metric.change %}
+                        <div class="text-xs mt-2 
+                            {% if metric.change > 0 %}text-green-600{% else %}text-red-600{% endif %}">
+                            <i class="fas fa-arrow-{% if metric.change > 0 %}up{% else %}down{% endif %} mr-1"></i>
+                            {{ metric.change|floatformat:1 }}%
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Charts -->
+            {% if report.content.charts %}
+            <div class="report-section mb-6 pl-4">
+                <h2 class="text-xl font-bold text-navy-900 mb-4">Visual Analysis</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {% for chart in report.content.charts %}
+                    <div>
+                        <h3 class="font-semibold text-gray-800 mb-2">{{ chart.title }}</h3>
+                        <canvas id="chart-{{ forloop.counter }}" height="200"></canvas>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Data Tables -->
+            {% if report.content.tables %}
+            <div class="report-section mb-6 pl-4">
+                <h2 class="text-xl font-bold text-navy-900 mb-4">Detailed Data</h2>
+                {% for table in report.content.tables %}
+                <div class="mb-6">
+                    <h3 class="font-semibold text-gray-800 mb-2">{{ table.title }}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50">
+                                    {% for header in table.headers %}
+                                    <th class="border px-4 py-2 text-left text-sm font-semibold text-gray-700">
+                                        {{ header }}
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in table.rows %}
+                                <tr class="hover:bg-gray-50">
+                                    {% for cell in row %}
+                                    <td class="border px-4 py-2 text-sm">{{ cell }}</td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% else %}
+            <div class="text-center py-12">
+                <i class="fas fa-file-alt text-6xl text-gray-300 mb-4"></i>
+                <p class="text-gray-500">Report content is being generated...</p>
+            </div>
+        {% endif %}
+    </div>
+    {% elif report.status == 'processing' %}
+    <!-- Processing State -->
+    <div class="bg-white rounded-lg shadow-sm p-12 text-center">
+        <div class="inline-flex items-center justify-center w-16 h-16 mb-4">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-navy-600"></div>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">Generating Report</h3>
+        <p class="text-gray-600">This may take a few moments...</p>
+    </div>
+    {% elif report.status == 'failed' %}
+    <!-- Error State -->
+    <div class="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div class="flex items-start">
+            <i class="fas fa-exclamation-triangle text-red-500 text-xl mr-3 mt-1"></i>
+            <div>
+                <h3 class="font-semibold text-red-900">Report Generation Failed</h3>
+                <p class="text-red-700 mt-1">{{ report.error_message|default:"An error occurred while generating the report." }}</p>
+                <button class="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                    <i class="fas fa-redo mr-2"></i>Retry Generation
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% if report.content.charts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    {% for chart in report.content.charts %}
+    const ctx{{ forloop.counter }} = document.getElementById('chart-{{ forloop.counter }}');
+    if (ctx{{ forloop.counter }}) {
+        new Chart(ctx{{ forloop.counter }}, {
+            type: '{{ chart.type|default:"line" }}',
+            data: {{ chart.data|safe }},
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+    {% endfor %}
+});
+</script>
+{% endif %}
+{% endblock %}

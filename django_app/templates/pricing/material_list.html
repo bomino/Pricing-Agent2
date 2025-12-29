@@ -1,0 +1,261 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}Materials - AI Pricing Agent{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <!-- Page Header -->
+    <div class="mb-6 flex justify-between items-start">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">Materials Management</h1>
+            <p class="text-gray-600 mt-1">Manage material master data and specifications</p>
+        </div>
+        <div class="flex space-x-3">
+            <button onclick="window.location.href='{% url 'pricing:material_create' %}'"
+                    class="btn btn-primary">
+                <i class="fas fa-plus mr-2"></i> Add Material
+            </button>
+            <button onclick="openBulkImport()" 
+                    class="btn btn-secondary">
+                <i class="fas fa-file-import mr-2"></i> Bulk Import
+            </button>
+        </div>
+    </div>
+    
+    <!-- Filters and Search -->
+    <div class="bg-white rounded-lg shadow p-4 mb-6">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <!-- Search -->
+            <div class="lg:col-span-2">
+                <div class="relative">
+                    <input type="text" 
+                           id="material-search"
+                           placeholder="Search materials by name, code, or description..." 
+                           class="form-input w-full pl-10"
+                           hx-get="{% url 'pricing:material_search' %}"
+                           hx-trigger="keyup changed delay:500ms"
+                           hx-target="#materials-table-body"
+                           hx-indicator="#search-indicator">
+                    <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                    <div id="search-indicator" class="htmx-indicator absolute right-3 top-3">
+                        <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Category Filter -->
+            <div>
+                <select id="category-filter" 
+                        class="form-input w-full"
+                        hx-get="{% url 'pricing:material_list' %}"
+                        hx-trigger="change"
+                        hx-target="#materials-table-body"
+                        hx-include="#material-search">
+                    <option value="">All Categories</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}">{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <!-- Status Filter -->
+            <div>
+                <select id="status-filter" 
+                        class="form-input w-full"
+                        hx-get="{% url 'pricing:material_list' %}"
+                        hx-trigger="change"
+                        hx-target="#materials-table-body"
+                        hx-include="#material-search, #category-filter">
+                    <option value="">All Status</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="pending">Pending Review</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Materials Table -->
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th class="w-12">
+                            <input type="checkbox" class="form-checkbox" id="select-all">
+                        </th>
+                        <th>Material Code</th>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Unit</th>
+                        <th>Current Price</th>
+                        <th>Last Updated</th>
+                        <th>Status</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="materials-table-body">
+                    {% for material in materials %}
+                    <tr class="hover:bg-gray-50 transition-colors" id="material-row-{{ material.id }}">
+                        <td>
+                            <input type="checkbox" class="form-checkbox material-checkbox" value="{{ material.id }}">
+                        </td>
+                        <td class="font-medium">{{ material.code }}</td>
+                        <td>
+                            <div>
+                                <div class="font-medium text-gray-900">{{ material.name }}</div>
+                                {% if material.description %}
+                                <div class="text-sm text-gray-500">{{ material.description|truncatewords:10 }}</div>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="px-2 py-1 text-xs rounded-full bg-navy-100 text-navy-800">
+                                {{ material.category.name }}
+                            </span>
+                        </td>
+                        <td>{{ material.unit }}</td>
+                        <td>
+                            {% if material.current_price %}
+                            <div>
+                                <div class="font-medium">${{ material.current_price|floatformat:2 }}</div>
+                                {% if material.price_change %}
+                                <div class="text-xs {% if material.price_change > 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                                    <i class="fas fa-arrow-{% if material.price_change > 0 %}up{% else %}down{% endif %}"></i>
+                                    {{ material.price_change|floatformat:1 }}%
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% else %}
+                            <span class="text-gray-400">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-sm text-gray-500">
+                            {{ material.updated_at|date:"M d, Y" }}
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ material.status|default:'active' }}">
+                                {{ material.get_status_display|default:'Active' }}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="flex justify-center space-x-2">
+                                <button onclick="viewMaterialDetail({{ material.id }})"
+                                        class="text-navy-600 hover:text-navy-900"
+                                        title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button onclick="editMaterial({{ material.id }})"
+                                        class="text-blue-600 hover:text-blue-900"
+                                        title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="viewPriceHistory({{ material.id }})"
+                                        class="text-green-600 hover:text-green-900"
+                                        title="Price History">
+                                    <i class="fas fa-chart-line"></i>
+                                </button>
+                                <button onclick="deleteMaterial({{ material.id }})"
+                                        class="text-red-600 hover:text-red-900"
+                                        title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-8 text-gray-500">
+                            <i class="fas fa-box-open text-4xl mb-3"></i>
+                            <p>No materials found</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="px-6 py-4 border-t border-gray-200">
+            <div class="flex items-center justify-between">
+                <div class="text-sm text-gray-700">
+                    Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ paginator.count }} materials
+                </div>
+                <div class="flex space-x-2">
+                    {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}" 
+                       class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50">
+                        Previous
+                    </a>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                    <a href="?page={{ num }}" 
+                       class="px-3 py-1 border rounded {% if page_obj.number == num %}bg-navy-600 text-white border-navy-600{% else %}border-gray-300 hover:bg-gray-50{% endif %}">
+                        {{ num }}
+                    </a>
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}" 
+                       class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50">
+                        Next
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Material Detail Modal -->
+<div id="material-detail-modal" class="modal" style="display: none;">
+    <div class="modal-content max-w-4xl">
+        <div class="modal-header">
+            <h2 class="text-xl font-bold">Material Details</h2>
+            <button onclick="closeModal('material-detail-modal')" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="material-detail-content" class="modal-body">
+            <!-- Content loaded via HTMX -->
+        </div>
+    </div>
+</div>
+
+<!-- Price History Modal -->
+<div id="price-history-modal" class="modal" style="display: none;">
+    <div class="modal-content max-w-5xl">
+        <div class="modal-header">
+            <h2 class="text-xl font-bold">Price History</h2>
+            <button onclick="closeModal('price-history-modal')" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="price-history-content" class="modal-body">
+            <!-- Chart loaded via HTMX -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script type="module">
+    import { MaterialManager } from '{% static "js/components/MaterialManager.js" %}';
+    
+    // Initialize material manager
+    const manager = new MaterialManager();
+    manager.init();
+    
+    // Expose functions to global scope for onclick handlers
+    window.viewMaterialDetail = (id) => manager.viewDetail(id);
+    window.editMaterial = (id) => manager.edit(id);
+    window.viewPriceHistory = (id) => manager.viewPriceHistory(id);
+    window.deleteMaterial = (id) => manager.delete(id);
+    window.openBulkImport = () => manager.openBulkImport();
+    window.closeModal = (id) => manager.closeModal(id);
+</script>
+{% endblock %}

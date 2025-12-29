@@ -1,0 +1,687 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # Code Quality Checks
+  code-quality:
+    runs-on: ubuntu-latest
+    name: Code Quality & Linting
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry install --with dev
+    
+    - name: Run Black (Code Formatting)
+      run: poetry run black --check --diff .
+    
+    - name: Run Ruff (Linting)
+      run: poetry run ruff check .
+    
+    - name: Run MyPy (Type Checking)
+      run: poetry run mypy django_app fastapi_ml --ignore-missing-imports
+    
+    - name: Check import sorting with isort
+      run: poetry run isort --check-only --diff .
+    
+    - name: Security scan with bandit
+      run: poetry run bandit -r django_app/ fastapi_ml/ -f json -o bandit-report.json
+      continue-on-error: true
+    
+    - name: Upload security scan results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: bandit-security-report
+        path: bandit-report.json
+
+  # Django Unit Tests
+  django-tests:
+    runs-on: ubuntu-latest
+    name: Django Unit Tests
+    
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_pricing_agent
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry install --with dev
+    
+    - name: Set up environment variables
+      run: |
+        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_pricing_agent" >> $GITHUB_ENV
+        echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
+        echo "SECRET_KEY=test-secret-key-for-ci" >> $GITHUB_ENV
+        echo "DEBUG=False" >> $GITHUB_ENV
+        echo "DJANGO_SETTINGS_MODULE=pricing_agent.settings.test" >> $GITHUB_ENV
+    
+    - name: Run Django migrations
+      run: |
+        cd django_app
+        poetry run python manage.py migrate --settings=pricing_agent.settings.test
+    
+    - name: Run Django unit tests
+      run: |
+        cd django_app
+        poetry run pytest tests/unit/ -v --cov=apps --cov-report=xml --cov-report=html --cov-fail-under=80
+    
+    - name: Upload Django test coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./django_app/coverage.xml
+        flags: django-unit-tests
+        name: Django Unit Tests Coverage
+
+  # FastAPI ML Service Tests
+  fastapi-tests:
+    runs-on: ubuntu-latest
+    name: FastAPI ML Service Tests
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry install --with dev
+    
+    - name: Set up environment variables
+      run: |
+        echo "REDIS_URL=redis://localhost:6379/1" >> $GITHUB_ENV
+        echo "ML_MODEL_PATH=test_models/" >> $GITHUB_ENV
+        echo "ENVIRONMENT=test" >> $GITHUB_ENV
+    
+    - name: Create test model directory
+      run: mkdir -p fastapi_ml/test_models/
+    
+    - name: Run FastAPI unit tests
+      run: |
+        cd fastapi_ml
+        poetry run pytest tests/unit/ -v --cov=. --cov-report=xml --cov-report=html --cov-fail-under=75
+    
+    - name: Upload FastAPI test coverage
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./fastapi_ml/coverage.xml
+        flags: fastapi-unit-tests
+        name: FastAPI Unit Tests Coverage
+
+  # Integration Tests
+  integration-tests:
+    runs-on: ubuntu-latest
+    name: Integration Tests
+    needs: [django-tests, fastapi-tests]
+    
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_pricing_agent
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry install --with dev
+    
+    - name: Set up environment variables
+      run: |
+        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_pricing_agent" >> $GITHUB_ENV
+        echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
+        echo "SECRET_KEY=test-secret-key-for-integration" >> $GITHUB_ENV
+        echo "ML_SERVICE_URL=http://localhost:8001" >> $GITHUB_ENV
+        echo "DJANGO_SETTINGS_MODULE=pricing_agent.settings.test" >> $GITHUB_ENV
+    
+    - name: Start FastAPI ML service in background
+      run: |
+        cd fastapi_ml
+        poetry run uvicorn main:app --host 0.0.0.0 --port 8001 &
+        sleep 10
+    
+    - name: Run Django migrations
+      run: |
+        cd django_app
+        poetry run python manage.py migrate --settings=pricing_agent.settings.test
+    
+    - name: Start Django server in background
+      run: |
+        cd django_app
+        poetry run python manage.py runserver 8000 --settings=pricing_agent.settings.test &
+        sleep 10
+    
+    - name: Run integration tests
+      run: |
+        poetry run pytest django_app/tests/integration/ fastapi_ml/tests/integration/ -v --maxfail=5
+    
+    - name: Upload integration test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: integration-test-results
+        path: |
+          django_app/tests/integration/reports/
+          fastapi_ml/tests/integration/reports/
+
+  # ML Model Tests
+  ml-model-tests:
+    runs-on: ubuntu-latest
+    name: ML Model Validation
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry install --with dev
+    
+    - name: Download test datasets
+      run: |
+        mkdir -p test_data/
+        # In real scenario, download or generate test datasets
+        echo "Creating synthetic test data for ML validation..."
+    
+    - name: Run ML model validation tests
+      run: |
+        cd fastapi_ml
+        poetry run pytest tests/ml/ -v -m "not slow" --tb=short
+    
+    - name: Run drift detection tests
+      run: |
+        cd fastapi_ml  
+        poetry run pytest tests/ml/test_drift_detection.py -v
+    
+    - name: Generate ML test reports
+      run: |
+        cd fastapi_ml
+        poetry run python -m tests.ml.test_model_validation --output ml_validation_report.json
+      continue-on-error: true
+    
+    - name: Upload ML test reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: ml-validation-reports
+        path: |
+          fastapi_ml/ml_validation_report.json
+          fastapi_ml/ml_validation_report_summary.txt
+
+  # Security Tests
+  security-tests:
+    runs-on: ubuntu-latest
+    name: Security Testing
+    needs: [integration-tests]
+    
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_pricing_agent
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry install --with dev
+    
+    - name: Set up test environment
+      run: |
+        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_pricing_agent" >> $GITHUB_ENV
+        echo "SECRET_KEY=test-secret-key-for-security" >> $GITHUB_ENV
+        echo "DJANGO_SETTINGS_MODULE=pricing_agent.settings.test" >> $GITHUB_ENV
+    
+    - name: Start test servers
+      run: |
+        cd django_app && poetry run python manage.py migrate --settings=pricing_agent.settings.test
+        cd django_app && poetry run python manage.py runserver 8000 --settings=pricing_agent.settings.test &
+        cd fastapi_ml && poetry run uvicorn main:app --host 0.0.0.0 --port 8001 &
+        sleep 15
+    
+    - name: Run security tests
+      run: |
+        poetry run python tests/security/security_tests.py --base-url http://localhost:8000 --ml-url http://localhost:8001 --output security_test_results.json
+      continue-on-error: true
+    
+    - name: Upload security test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-test-results
+        path: |
+          security_test_results.json
+          security_test_results_summary.txt
+
+  # Data Quality Tests
+  data-quality-tests:
+    runs-on: ubuntu-latest
+    name: Data Quality Validation
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry install --with dev
+    
+    - name: Generate test datasets
+      run: |
+        poetry run python -c "
+        import pandas as pd
+        import numpy as np
+        
+        # Create test datasets with quality issues
+        pricing_data = pd.DataFrame({
+            'material_id': range(1, 1001),
+            'price': np.random.exponential(50, 1000),
+            'quantity': np.random.randint(1, 1000, 1000),
+            'currency': np.random.choice(['USD', 'EUR', 'GBP'], 1000)
+        })
+        
+        # Introduce some quality issues
+        pricing_data.loc[np.random.choice(1000, 50, replace=False), 'price'] = np.nan
+        pricing_data.loc[np.random.choice(1000, 20, replace=False), 'price'] = -1
+        
+        pricing_data.to_csv('test_pricing_data.csv', index=False)
+        print('Test data generated')
+        "
+    
+    - name: Run data quality tests
+      run: |
+        poetry run pytest tests/data_quality/ -v --tb=short
+    
+    - name: Generate data quality reports
+      run: |
+        poetry run python -c "
+        import sys
+        sys.path.append('tests/data_quality')
+        
+        from data_validation_tests import DataQualityTestSuite, generate_data_quality_report
+        import pandas as pd
+        
+        # Load test data
+        data = pd.read_csv('test_pricing_data.csv')
+        
+        # Run validation
+        validator = DataQualityTestSuite.pricing_data_suite()
+        results = validator.validate_dataset(data)
+        summary = validator.get_summary()
+        
+        # Generate report
+        generate_data_quality_report(results, summary, 'data_quality_report.json')
+        print('Data quality report generated')
+        "
+      continue-on-error: true
+    
+    - name: Upload data quality reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: data-quality-reports
+        path: |
+          data_quality_report.json
+          data_quality_report_summary.txt
+
+  # Build and Package
+  build:
+    runs-on: ubuntu-latest
+    name: Build & Package
+    needs: [code-quality, django-tests, fastapi-tests]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry build
+        poetry install
+    
+    - name: Build Python packages
+      run: |
+        poetry build
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Build Django Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile.django
+        push: false
+        tags: pricing-agent-django:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Build FastAPI Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./Dockerfile.fastapi
+        push: false
+        tags: pricing-agent-fastapi:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: python-packages
+        path: dist/
+
+  # End-to-End Tests
+  e2e-tests:
+    runs-on: ubuntu-latest
+    name: End-to-End Tests
+    needs: [build]
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_pricing_agent
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install poetry
+        poetry install --with dev
+    
+    - name: Install Playwright
+      run: |
+        pip install playwright
+        playwright install chromium
+    
+    - name: Set up test environment
+      run: |
+        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_pricing_agent" >> $GITHUB_ENV
+        echo "REDIS_URL=redis://localhost:6379/0" >> $GITHUB_ENV
+        echo "SECRET_KEY=test-secret-key-for-e2e" >> $GITHUB_ENV
+        echo "DJANGO_SETTINGS_MODULE=pricing_agent.settings.test" >> $GITHUB_ENV
+    
+    - name: Start Redis
+      run: |
+        docker run -d --name redis -p 6379:6379 redis:7-alpine
+        sleep 5
+    
+    - name: Start application servers
+      run: |
+        cd django_app && poetry run python manage.py migrate --settings=pricing_agent.settings.test
+        cd django_app && poetry run python manage.py runserver 8000 --settings=pricing_agent.settings.test &
+        cd fastapi_ml && poetry run uvicorn main:app --host 0.0.0.0 --port 8001 &
+        sleep 20
+    
+    - name: Wait for services to be ready
+      run: |
+        timeout 60 bash -c 'until curl -f http://localhost:8000/health/; do sleep 1; done'
+        timeout 60 bash -c 'until curl -f http://localhost:8001/health; do sleep 1; done'
+    
+    - name: Run E2E tests
+      run: |
+        poetry run pytest django_app/tests/e2e/ -v --tb=short
+      continue-on-error: true
+    
+    - name: Upload E2E test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: e2e-test-results
+        path: |
+          django_app/tests/e2e/screenshots/
+          django_app/tests/e2e/videos/
+          django_app/tests/e2e/reports/
+
+  # Test Summary
+  test-summary:
+    runs-on: ubuntu-latest
+    name: Test Summary
+    needs: [code-quality, django-tests, fastapi-tests, integration-tests, ml-model-tests, security-tests, data-quality-tests]
+    if: always()
+    
+    steps:
+    - name: Download all test artifacts
+      uses: actions/download-artifact@v3
+    
+    - name: Generate test summary
+      run: |
+        echo "## Test Results Summary" > test_summary.md
+        echo "" >> test_summary.md
+        
+        # Check job results
+        if [ "${{ needs.code-quality.result }}" = "success" ]; then
+          echo "✅ Code Quality: PASSED" >> test_summary.md
+        else
+          echo "❌ Code Quality: FAILED" >> test_summary.md
+        fi
+        
+        if [ "${{ needs.django-tests.result }}" = "success" ]; then
+          echo "✅ Django Unit Tests: PASSED" >> test_summary.md
+        else
+          echo "❌ Django Unit Tests: FAILED" >> test_summary.md
+        fi
+        
+        if [ "${{ needs.fastapi-tests.result }}" = "success" ]; then
+          echo "✅ FastAPI Unit Tests: PASSED" >> test_summary.md
+        else
+          echo "❌ FastAPI Unit Tests: FAILED" >> test_summary.md
+        fi
+        
+        if [ "${{ needs.integration-tests.result }}" = "success" ]; then
+          echo "✅ Integration Tests: PASSED" >> test_summary.md
+        else
+          echo "❌ Integration Tests: FAILED" >> test_summary.md
+        fi
+        
+        if [ "${{ needs.ml-model-tests.result }}" = "success" ]; then
+          echo "✅ ML Model Tests: PASSED" >> test_summary.md
+        else
+          echo "❌ ML Model Tests: FAILED" >> test_summary.md
+        fi
+        
+        if [ "${{ needs.security-tests.result }}" = "success" ]; then
+          echo "✅ Security Tests: PASSED" >> test_summary.md
+        else
+          echo "❌ Security Tests: FAILED" >> test_summary.md
+        fi
+        
+        if [ "${{ needs.data-quality-tests.result }}" = "success" ]; then
+          echo "✅ Data Quality Tests: PASSED" >> test_summary.md
+        else
+          echo "❌ Data Quality Tests: FAILED" >> test_summary.md
+        fi
+        
+        echo "" >> test_summary.md
+        echo "**Artifacts Available:**" >> test_summary.md
+        echo "- Test Coverage Reports" >> test_summary.md
+        echo "- Security Scan Results" >> test_summary.md
+        echo "- ML Model Validation Reports" >> test_summary.md
+        echo "- Data Quality Reports" >> test_summary.md
+        
+        cat test_summary.md
+    
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('test_summary.md', 'utf8');
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: summary
+          });

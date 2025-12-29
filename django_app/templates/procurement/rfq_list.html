@@ -1,0 +1,487 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}RFQ Management - AI Pricing Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+    
+    .status-draft { background: #f3f4f6; color: #6b7280; }
+    .status-published { background: #dbeafe; color: #1e40af; }
+    .status-open { background: #dcfce7; color: #166534; }
+    .status-closed { background: #fee2e2; color: #991b1b; }
+    .status-cancelled { background: #f3f4f6; color: #6b7280; }
+    .status-awarded { background: #fef3c7; color: #92400e; }
+    
+    .priority-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+    }
+    
+    .priority-low { background: #f0f9ff; color: #0369a1; }
+    .priority-normal { background: #f0fdf4; color: #166534; }
+    .priority-high { background: #fef3c7; color: #92400e; }
+    .priority-urgent { background: #fee2e2; color: #991b1b; }
+    
+    .rfq-card {
+        transition: all 0.2s;
+        border-left: 4px solid transparent;
+    }
+    
+    .rfq-card:hover {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        transform: translateY(-1px);
+    }
+    
+    .rfq-card.status-draft { border-left-color: #6b7280; }
+    .rfq-card.status-published { border-left-color: #1e40af; }
+    .rfq-card.status-open { border-left-color: #166534; }
+    .rfq-card.status-closed { border-left-color: #991b1b; }
+    
+    .deadline-warning { color: #dc2626; }
+    .deadline-soon { color: #f59e0b; }
+    .deadline-normal { color: #6b7280; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <div class="flex justify-between items-start">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Request for Quotes</h1>
+                <p class="mt-2 text-sm text-gray-600">Manage procurement requests and supplier quotations</p>
+            </div>
+            <div class="flex space-x-3">
+                <button onclick="window.location.href='{% url 'procurement:rfq_create' %}'"
+                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-navy-600 hover:bg-navy-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy-500">
+                    <i class="fas fa-plus mr-2"></i> Create New RFQ
+                </button>
+                <button onclick="exportRFQs()"
+                        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy-500">
+                    <i class="fas fa-download mr-2"></i> Export
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-3 bg-blue-100 rounded-full">
+                    <i class="fas fa-file-alt text-blue-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Total RFQs</p>
+                    <p class="text-2xl font-semibold text-gray-900">{{ rfqs.count|default:0 }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-3 bg-green-100 rounded-full">
+                    <i class="fas fa-clock text-green-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Open RFQs</p>
+                    <p class="text-2xl font-semibold text-gray-900">{{ open_rfqs|default:0 }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-3 bg-yellow-100 rounded-full">
+                    <i class="fas fa-hourglass-half text-yellow-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Pending Quotes</p>
+                    <p class="text-2xl font-semibold text-gray-900">{{ pending_quotes|default:0 }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-3 bg-purple-100 rounded-full">
+                    <i class="fas fa-building text-purple-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Suppliers Invited</p>
+                    <p class="text-2xl font-semibold text-gray-900">{{ total_suppliers|default:0 }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-center">
+                <div class="flex-shrink-0 p-3 bg-orange-100 rounded-full">
+                    <i class="fas fa-trophy text-orange-600"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Awarded</p>
+                    <p class="text-2xl font-semibold text-gray-900">{{ awarded_rfqs|default:0 }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filters and Search -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+            <!-- Search Bar -->
+            <div class="flex-1 max-w-lg">
+                <div class="relative">
+                    <input type="text" 
+                           id="rfq-search"
+                           placeholder="Search RFQs by number, title, or description..." 
+                           class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-navy-500 focus:border-navy-500">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-search text-gray-400"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Filters -->
+            <div class="flex flex-wrap gap-2">
+                <select id="status-filter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-navy-500 focus:border-navy-500">
+                    <option value="">All Status</option>
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                    <option value="open">Open</option>
+                    <option value="closed">Closed</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="awarded">Awarded</option>
+                </select>
+                
+                <select id="priority-filter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-navy-500 focus:border-navy-500">
+                    <option value="">All Priorities</option>
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                </select>
+                
+                <select id="date-filter" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-navy-500 focus:border-navy-500">
+                    <option value="">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                    <option value="quarter">This Quarter</option>
+                </select>
+                
+                <button onclick="clearFilters()" class="px-3 py-2 text-sm text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times mr-1"></i> Clear
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- RFQ List -->
+    <div class="space-y-4" id="rfq-list">
+        {% for rfq in rfqs %}
+        <div class="rfq-card bg-white rounded-lg shadow-sm border border-gray-200 p-6 status-{{ rfq.status }}">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <h3 class="text-lg font-semibold text-gray-900">
+                            <a href="{% url 'procurement:rfq_detail' rfq.id %}" class="hover:text-navy-600">
+                                {{ rfq.title }}
+                            </a>
+                        </h3>
+                        <span class="status-badge status-{{ rfq.status }}">
+                            {{ rfq.get_status_display }}
+                        </span>
+                        {% if rfq.priority %}
+                        <span class="priority-badge priority-{{ rfq.priority }}">
+                            <i class="fas fa-flag mr-1"></i>
+                            {{ rfq.get_priority_display|default:"Normal" }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex items-center space-x-4 text-sm text-gray-500 mb-3">
+                        <span>
+                            <i class="fas fa-hashtag mr-1"></i>
+                            {{ rfq.rfq_number }}
+                        </span>
+                        <span>
+                            <i class="fas fa-calendar mr-1"></i>
+                            Created {{ rfq.created_at|date:"M d, Y" }}
+                        </span>
+                        <span class="{% if rfq.is_overdue %}deadline-warning{% elif rfq.is_soon %}deadline-soon{% else %}deadline-normal{% endif %}">
+                            <i class="fas fa-clock mr-1"></i>
+                            Due {{ rfq.deadline|date:"M d, Y g:i A" }}
+                        </span>
+                    </div>
+                    
+                    {% if rfq.description %}
+                    <p class="text-sm text-gray-600 mb-3 line-clamp-2">
+                        {{ rfq.description|truncatewords:30 }}
+                    </p>
+                    {% endif %}
+                    
+                    <div class="flex items-center space-x-6 text-sm">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-building text-gray-400"></i>
+                            <span class="text-gray-600">
+                                <strong>{{ rfq.invited_suppliers.count|default:0 }}</strong> Suppliers
+                            </span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-file-invoice text-gray-400"></i>
+                            <span class="text-gray-600">
+                                <strong>{{ rfq.quotes.count|default:0 }}</strong> Quotes
+                            </span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-box text-gray-400"></i>
+                            <span class="text-gray-600">
+                                <strong>{{ rfq.items.count|default:0 }}</strong> Items
+                            </span>
+                        </div>
+                        {% if rfq.total_value %}
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-dollar-sign text-gray-400"></i>
+                            <span class="text-gray-600">
+                                Est. <strong>${{ rfq.total_value|floatformat:0 }}</strong>
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-2 ml-4">
+                    <a href="{% url 'procurement:rfq_detail' rfq.id %}" 
+                       class="text-gray-500 hover:text-navy-600 p-2"
+                       title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    <a href="{% url 'procurement:rfq_edit' rfq.id %}" 
+                       class="text-gray-500 hover:text-blue-600 p-2"
+                       title="Edit">
+                        <i class="fas fa-edit"></i>
+                    </a>
+                    {% if rfq.status == 'draft' %}
+                    <button onclick="publishRFQ('{{ rfq.id }}')" 
+                            class="text-gray-500 hover:text-green-600 p-2"
+                            title="Publish">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                    {% endif %}
+                    <button onclick="showQuotes('{{ rfq.id }}')" 
+                            class="text-gray-500 hover:text-purple-600 p-2"
+                            title="View Quotes">
+                        <i class="fas fa-file-invoice-dollar"></i>
+                    </button>
+                    <div class="relative">
+                        <button onclick="toggleMenu('{{ rfq.id }}')" 
+                                class="text-gray-500 hover:text-gray-700 p-2">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div id="menu-{{ rfq.id }}" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10">
+                            <div class="py-1">
+                                <a href="#" onclick="duplicateRFQ('{{ rfq.id }}')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <i class="fas fa-copy mr-2"></i> Duplicate
+                                </a>
+                                <a href="#" onclick="exportRFQ('{{ rfq.id }}')" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                    <i class="fas fa-download mr-2"></i> Export
+                                </a>
+                                {% if rfq.status == 'draft' %}
+                                <a href="#" onclick="deleteRFQ('{{ rfq.id }}')" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
+                                    <i class="fas fa-trash mr-2"></i> Delete
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+            <i class="fas fa-file-alt text-6xl text-gray-300 mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No RFQs Found</h3>
+            <p class="text-gray-500 mb-6">Get started by creating your first Request for Quote</p>
+            <button onclick="window.location.href='{% url 'procurement:rfq_create' %}'"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-navy-600 hover:bg-navy-700">
+                <i class="fas fa-plus mr-2"></i> Create Your First RFQ
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+        
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <div class="mt-8 flex items-center justify-between">
+        <div class="text-sm text-gray-700">
+            Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ paginator.count }} RFQs
+        </div>
+        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}" 
+               class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                <i class="fas fa-chevron-left"></i>
+            </a>
+            {% endif %}
+            
+            {% for num in page_obj.paginator.page_range %}
+            <a href="?page={{ num }}" 
+               class="relative inline-flex items-center px-4 py-2 border text-sm font-medium
+                      {% if page_obj.number == num %}
+                      z-10 bg-navy-50 border-navy-500 text-navy-600
+                      {% else %}
+                      bg-white border-gray-300 text-gray-500 hover:bg-gray-50
+                      {% endif %}">
+                {{ num }}
+            </a>
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}" 
+               class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                <i class="fas fa-chevron-right"></i>
+            </a>
+            {% endif %}
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+// Search functionality
+document.getElementById('rfq-search').addEventListener('input', function(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const rfqCards = document.querySelectorAll('.rfq-card');
+    
+    rfqCards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(searchTerm) ? '' : 'none';
+    });
+});
+
+// Filter functionality
+['status-filter', 'priority-filter', 'date-filter'].forEach(filterId => {
+    document.getElementById(filterId).addEventListener('change', applyFilters);
+});
+
+function applyFilters() {
+    // Implementation for filtering
+    const status = document.getElementById('status-filter').value;
+    const priority = document.getElementById('priority-filter').value;
+    const date = document.getElementById('date-filter').value;
+    
+    // Apply filters to the list
+    console.log('Applying filters:', { status, priority, date });
+}
+
+function clearFilters() {
+    document.getElementById('status-filter').value = '';
+    document.getElementById('priority-filter').value = '';
+    document.getElementById('date-filter').value = '';
+    document.getElementById('rfq-search').value = '';
+    applyFilters();
+}
+
+function toggleMenu(rfqId) {
+    const menu = document.getElementById(`menu-${rfqId}`);
+    menu.classList.toggle('hidden');
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', function closeMenu(e) {
+        if (!e.target.closest(`#menu-${rfqId}`) && !e.target.closest('button')) {
+            menu.classList.add('hidden');
+            document.removeEventListener('click', closeMenu);
+        }
+    });
+}
+
+function publishRFQ(rfqId) {
+    if (confirm('Are you sure you want to publish this RFQ? This will send it to selected suppliers.')) {
+        fetch(`/procurement/rfqs/${rfqId}/send/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                showNotification('RFQ published successfully!', 'success');
+                setTimeout(() => location.reload(), 1500);
+            }
+        });
+    }
+}
+
+function showQuotes(rfqId) {
+    window.location.href = `/procurement/analytics/quote-comparison/?rfq_id=${rfqId}`;
+}
+
+function duplicateRFQ(rfqId) {
+    if (confirm('Create a duplicate of this RFQ?')) {
+        // Implementation for duplicating RFQ
+        console.log('Duplicating RFQ:', rfqId);
+    }
+}
+
+function exportRFQ(rfqId) {
+    window.location.href = `/procurement/rfqs/${rfqId}/export/`;
+}
+
+function deleteRFQ(rfqId) {
+    // Navigate to the delete confirmation page
+    window.location.href = `/procurement/rfqs/${rfqId}/delete/`;
+}
+
+function exportRFQs() {
+    window.location.href = '/procurement/rfqs/export/';
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 ${
+        type === 'success' ? 'bg-green-500' : 
+        type === 'error' ? 'bg-red-500' : 
+        'bg-blue-500'
+    }`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+</script>
+{% endblock %}
