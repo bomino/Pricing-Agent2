@@ -88,13 +88,13 @@
     <!-- Core JavaScript Modules -->
     <script type="module">
         // Import core modules
-        import Theme from '{% static "js/config/theme.js" %}';
+        import Theme, { initTheme } from '{% static "js/config/theme.js" %}';
         import ChartConfig from '{% static "js/config/charts.js" %}';
         import API from '{% static "js/utils/api.js" %}';
-        
+
         // Initialize theme
-        Theme.initTheme();
-        
+        initTheme();
+
         // Make modules available globally if needed
         window.AppTheme = Theme;
         window.ChartConfig = ChartConfig;

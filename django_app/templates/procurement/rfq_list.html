@@ -436,8 +436,8 @@ function showQuotes(rfqId) {
 
 function duplicateRFQ(rfqId) {
     if (confirm('Create a duplicate of this RFQ?')) {
-        // Implementation for duplicating RFQ
-        console.log('Duplicating RFQ:', rfqId);
+        // Navigate to duplicate URL which will create the duplicate and redirect to edit
+        window.location.href = `/procurement/rfqs/${rfqId}/duplicate/`;
     }
 }
 

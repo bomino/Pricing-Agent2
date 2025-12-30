@@ -269,6 +269,7 @@ class RFQ(TimestampedModel):
     
     # Suppliers
     invited_suppliers = models.ManyToManyField(Supplier, blank=True, related_name='invited_rfqs')
+    suppliers = models.ManyToManyField(Supplier, blank=True, related_name='rfqs')  # Alias for compatibility
     public_rfq = models.BooleanField(default=False)  # Open to all suppliers
     
     # Terms and conditions

@@ -80,46 +80,95 @@ class ContractForm(ModelForm):
 
 class RFQForm(ModelForm):
     """RFQ form with Tailwind CSS styling"""
-    
+
     class Meta:
         model = RFQ
         fields = [
-            'title', 'rfq_number', 'description', 'deadline', 
-            'required_delivery_date', 
-            'terms_and_conditions', 'status'
+            'title', 'rfq_number', 'description', 'department', 'cost_center',
+            'deadline', 'required_delivery_date',
+            'payment_terms', 'delivery_terms', 'terms_and_conditions',
+            'priority', 'public_rfq', 'evaluation_criteria', 'status'
         ]
-        
+
         widgets = {
             'title': forms.TextInput(attrs={
                 'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors',
-                'placeholder': 'Enter RFQ title'
+                'placeholder': 'Enter RFQ title',
+                'required': True
             }),
             'rfq_number': forms.TextInput(attrs={
                 'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors',
-                'placeholder': 'RFQ number will be auto-generated'
+                'placeholder': 'RFQ number will be auto-generated',
+                'readonly': True
             }),
             'description': forms.Textarea(attrs={
                 'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors resize-vertical',
-                'rows': 4,
-                'placeholder': 'Describe the requirements'
+                'rows': 5,
+                'placeholder': 'Describe the requirements in detail',
+                'required': True
+            }),
+            'department': forms.TextInput(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors',
+                'placeholder': 'Enter department name'
+            }),
+            'cost_center': forms.TextInput(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors',
+                'placeholder': 'Enter cost center'
             }),
             'deadline': forms.DateTimeInput(attrs={
                 'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors',
-                'type': 'datetime-local'
+                'type': 'datetime-local',
+                'required': True
             }),
             'required_delivery_date': forms.DateInput(attrs={
                 'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors',
                 'type': 'date'
             }),
+            'payment_terms': forms.TextInput(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors',
+                'placeholder': 'e.g., Net 30, 2/10 Net 30'
+            }),
+            'delivery_terms': forms.TextInput(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors',
+                'placeholder': 'e.g., FOB, CIF, DDP'
+            }),
             'terms_and_conditions': forms.Textarea(attrs={
                 'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors resize-vertical',
                 'rows': 4,
-                'placeholder': 'Enter terms and conditions'
+                'placeholder': 'Enter additional terms and conditions'
+            }),
+            'priority': forms.Select(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors bg-white'
+            }),
+            'public_rfq': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-navy-600 focus:ring-navy-500 border-gray-300 rounded'
+            }),
+            'evaluation_criteria': forms.Textarea(attrs={
+                'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors resize-vertical',
+                'rows': 3,
+                'placeholder': 'Enter evaluation criteria (optional)'
             }),
             'status': forms.Select(attrs={
                 'class': 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-navy-500 focus:ring-1 focus:ring-navy-500 transition-colors bg-white'
             })
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Auto-generate RFQ number if creating new RFQ
+        if not self.instance.pk:
+            from django.utils import timezone
+            import random
+            timestamp = timezone.now().strftime('%Y%m%d')
+            random_suffix = str(random.randint(1000, 9999))
+            self.fields['rfq_number'].initial = f'RFQ-{timestamp}-{random_suffix}'
+
+        # Handle JSONField for evaluation_criteria
+        if self.instance.pk and self.instance.evaluation_criteria:
+            import json
+            if isinstance(self.instance.evaluation_criteria, dict):
+                self.fields['evaluation_criteria'].initial = json.dumps(self.instance.evaluation_criteria, indent=2)
 
 
 class SupplierForm(ModelForm):

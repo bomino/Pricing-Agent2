@@ -173,8 +173,25 @@ class RFQCreateView(OrganizationRequiredMixin, CreateView):
     """Create new RFQ"""
     model = RFQ
     form_class = RFQForm
-    template_name = 'procurement/rfq_form.html'
-    
+    template_name = 'procurement/rfq_form.html'  # Using standard template
+
+    def get_initial(self):
+        """Pre-populate supplier if provided in query params"""
+        initial = super().get_initial()
+        supplier_id = self.request.GET.get('supplier')
+        if supplier_id:
+            try:
+                # Get supplier from the same organization
+                supplier = Supplier.objects.get(
+                    id=supplier_id,
+                    organization=self.get_user_organization()
+                )
+                # Pre-select suppliers in the form
+                initial['suppliers'] = [supplier]
+            except (Supplier.DoesNotExist, ValueError):
+                pass
+        return initial
+
     def form_valid(self, form):
         form.instance.organization = self.get_user_organization()
         form.instance.created_by = self.request.user
@@ -190,7 +207,7 @@ class RFQUpdateView(OrganizationRequiredMixin, UpdateView):
     """Update RFQ"""
     model = RFQ
     form_class = RFQForm
-    template_name = 'procurement/rfq_form.html'
+    template_name = 'procurement/rfq_form.html'  # Using standard template
     
     def get_queryset(self):
         return RFQ.objects.filter(
@@ -224,6 +241,67 @@ class RFQDeleteView(OrganizationRequiredMixin, DeleteView):
         rfq = self.get_object()
         messages.success(request, f'RFQ "{rfq.title}" has been deleted.')
         return super().delete(request, *args, **kwargs)
+
+
+class RFQDuplicateView(OrganizationRequiredMixin, DetailView):
+    """Duplicate RFQ view"""
+    model = RFQ
+
+    def get_queryset(self):
+        return RFQ.objects.filter(
+            organization=self.get_user_organization()
+        )
+
+    def get(self, request, *args, **kwargs):
+        """Handle RFQ duplication"""
+        original_rfq = self.get_object()
+
+        # Create a duplicate RFQ
+        duplicated_rfq = RFQ.objects.create(
+            organization=self.get_user_organization(),
+            title=f"Copy of {original_rfq.title}",
+            description=original_rfq.description,
+            department=original_rfq.department,
+            cost_center=original_rfq.cost_center,
+            payment_terms=original_rfq.payment_terms,
+            delivery_terms=original_rfq.delivery_terms,
+            terms_and_conditions=original_rfq.terms_and_conditions,
+            priority=original_rfq.priority,
+            public_rfq=original_rfq.public_rfq,
+            evaluation_criteria=original_rfq.evaluation_criteria,
+            attachments=original_rfq.attachments,
+            status='draft',  # Set as draft for editing
+            deadline=timezone.now() + timezone.timedelta(days=30),  # Set new deadline 30 days from now
+            required_delivery_date=original_rfq.required_delivery_date if original_rfq.required_delivery_date and original_rfq.required_delivery_date > timezone.now().date() else None,
+            created_by=request.user
+        )
+
+        # Generate new RFQ number
+        duplicated_rfq.rfq_number = f"RFQ-{duplicated_rfq.id.hex[:8].upper()}"
+        duplicated_rfq.save()
+
+        # Copy RFQ items
+        for item in original_rfq.items.all():
+            RFQItem.objects.create(
+                rfq=duplicated_rfq,
+                material=item.material,
+                quantity=item.quantity,
+                unit_of_measure=item.unit_of_measure,
+                specifications=item.specifications,
+                notes=item.notes,
+                required_delivery_date=item.required_delivery_date if item.required_delivery_date and item.required_delivery_date > timezone.now().date() else None,
+                delivery_location=item.delivery_location,
+                budget_estimate=item.budget_estimate,
+                last_purchase_price=item.last_purchase_price
+            )
+
+        # Copy invited suppliers
+        duplicated_rfq.invited_suppliers.set(original_rfq.invited_suppliers.all())
+
+        messages.success(request, f'RFQ "{original_rfq.title}" has been duplicated successfully!')
+
+        # Redirect to edit the duplicated RFQ
+        return redirect('procurement:rfq_edit', pk=duplicated_rfq.pk)
 
 
 class RFQSendView(OrganizationRequiredMixin, TemplateView):
@@ -466,11 +544,62 @@ class SupplierPerformanceView(OrganizationRequiredMixin, TemplateView):
         ).annotate(
             total_quotes=Count('quote'),
             approved_quotes=Count('quote', filter=Q(quote__status='approved')),
-            avg_quote_value=Avg('quote__total_value')
+            avg_quote_value=Avg('quote__total_amount')
         ).filter(total_quotes__gt=0).order_by('-approved_quotes')[:10]
         
         context['top_suppliers'] = suppliers_performance
         
+        return context
+
+
+class SupplierIndividualPerformanceView(OrganizationRequiredMixin, DetailView):
+    """Individual supplier performance view"""
+    model = Supplier
+    template_name = 'procurement/supplier_individual_performance.html'
+    context_object_name = 'supplier'
+
+    def get_queryset(self):
+        """Filter suppliers by organization"""
+        organization = self.get_user_organization()
+        if not organization:
+            return Supplier.objects.none()
+        return Supplier.objects.filter(organization=organization)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        supplier = self.object
+
+        # Calculate performance metrics
+        quotes = Quote.objects.filter(
+            supplier=supplier,
+            rfq__organization=self.get_user_organization()
+        )
+
+        # Get RFQs related to this supplier
+        rfqs = RFQ.objects.filter(
+            invited_suppliers=supplier,
+            organization=self.get_user_organization()
+        ).order_by('-created_at')[:10]
+
+        # Calculate metrics
+        context['total_rfqs'] = rfqs.count()
+        context['total_quotes'] = quotes.count()
+        context['approved_quotes'] = quotes.filter(status='approved').count()
+        context['pending_quotes'] = quotes.filter(status='pending').count()
+        context['rejected_quotes'] = quotes.filter(status='rejected').count()
+        context['average_quote_value'] = quotes.aggregate(avg=Avg('total_amount'))['avg'] or 0
+        context['total_business'] = quotes.filter(status='approved').aggregate(sum=Sum('total_amount'))['sum'] or 0
+
+        # Quote history
+        context['recent_quotes'] = quotes.order_by('-created_at')[:10]
+        context['recent_rfqs'] = rfqs
+
+        # Win rate
+        if context['total_quotes'] > 0:
+            context['win_rate'] = (context['approved_quotes'] / context['total_quotes']) * 100
+        else:
+            context['win_rate'] = 0
+
         return context
 
 
@@ -724,3 +853,209 @@ class QuoteViewSet(viewsets.ModelViewSet):
         quote.save()
         
         return Response({'message': 'Quote rejected successfully'})
+
+
+# Export Views (Placeholder implementations)
+class RFQExportView(OrganizationRequiredMixin, View):
+    """Export RFQ to Excel/PDF"""
+
+    def get(self, request, pk=None):
+        """Handle RFQ export"""
+        # Placeholder implementation
+        html_content = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Export Coming Soon</title>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+            <style>
+                body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f3f4f6; }
+                .container { text-align: center; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                h1 { color: #1e3a8a; margin-bottom: 10px; }
+                .icon { font-size: 48px; color: #1e3a8a; margin-bottom: 20px; }
+                p { color: #6b7280; margin: 10px 0; }
+                button { background: #1e3a8a; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 20px; }
+                button:hover { background: #1e40af; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="icon">
+                    <i class="fas fa-file-export"></i>
+                </div>
+                <h1>Export Feature Coming Soon!</h1>
+                <p>The RFQ export functionality is currently under development.</p>
+                <p>You'll soon be able to export RFQs to Excel and PDF formats.</p>
+                <button onclick="window.history.back()">Go Back</button>
+            </div>
+        </body>
+        </html>
+        """
+        return HttpResponse(html_content, content_type='text/html')
+
+
+class SupplierExportView(OrganizationRequiredMixin, View):
+    """Export suppliers to Excel/CSV"""
+
+    def get(self, request, pk=None):
+        """Handle supplier export"""
+        # Placeholder implementation
+        html_content = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Export Coming Soon</title>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+            <style>
+                body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f3f4f6; }
+                .container { text-align: center; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                h1 { color: #1e3a8a; margin-bottom: 10px; }
+                .icon { font-size: 48px; color: #1e3a8a; margin-bottom: 20px; }
+                p { color: #6b7280; margin: 10px 0; }
+                button { background: #1e3a8a; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 20px; }
+                button:hover { background: #1e40af; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="icon">
+                    <i class="fas fa-building"></i>
+                </div>
+                <h1>Export Feature Coming Soon!</h1>
+                <p>The supplier export functionality is currently under development.</p>
+                <p>You'll soon be able to export supplier data to Excel and CSV formats.</p>
+                <button onclick="window.history.back()">Go Back</button>
+            </div>
+        </body>
+        </html>
+        """
+        return HttpResponse(html_content, content_type='text/html')
+
+
+class SupplierPerformanceExportView(OrganizationRequiredMixin, View):
+    """Export supplier performance report"""
+
+    def get(self, request, pk):
+        """Handle supplier performance export"""
+        # Placeholder implementation
+        html_content = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Export Coming Soon</title>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+            <style>
+                body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f3f4f6; }
+                .container { text-align: center; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                h1 { color: #1e3a8a; margin-bottom: 10px; }
+                .icon { font-size: 48px; color: #1e3a8a; margin-bottom: 20px; }
+                p { color: #6b7280; margin: 10px 0; }
+                button { background: #1e3a8a; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 20px; }
+                button:hover { background: #1e40af; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h1>Export Feature Coming Soon!</h1>
+                <p>The performance report export functionality is currently under development.</p>
+                <p>You'll soon be able to export detailed performance analytics to PDF and Excel.</p>
+                <button onclick="window.history.back()">Go Back</button>
+            </div>
+        </body>
+        </html>
+        """
+        return HttpResponse(html_content, content_type='text/html')
+
+
+class QuoteExportView(OrganizationRequiredMixin, View):
+    """Export quotes to Excel/CSV"""
+
+    def get(self, request):
+        """Handle quote export"""
+        # Placeholder implementation
+        html_content = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Export Coming Soon</title>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+            <style>
+                body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f3f4f6; }
+                .container { text-align: center; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                h1 { color: #1e3a8a; margin-bottom: 10px; }
+                .icon { font-size: 48px; color: #1e3a8a; margin-bottom: 20px; }
+                p { color: #6b7280; margin: 10px 0; }
+                button { background: #1e3a8a; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 20px; }
+                button:hover { background: #1e40af; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="icon">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                </div>
+                <h1>Export Feature Coming Soon!</h1>
+                <p>The quote export functionality is currently under development.</p>
+                <p>You'll soon be able to export quotes to Excel and CSV formats.</p>
+                <button onclick="window.history.back()">Go Back</button>
+            </div>
+        </body>
+        </html>
+        """
+        return HttpResponse(html_content, content_type='text/html')
+
+
+class ContractExportView(OrganizationRequiredMixin, View):
+    """Export contracts to Excel/PDF"""
+
+    def get(self, request):
+        """Handle contract export"""
+        # Placeholder implementation
+        html_content = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Export Coming Soon</title>
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+            <style>
+                body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f3f4f6; }
+                .container { text-align: center; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                h1 { color: #1e3a8a; margin-bottom: 10px; }
+                .icon { font-size: 48px; color: #1e3a8a; margin-bottom: 20px; }
+                p { color: #6b7280; margin: 10px 0; }
+                button { background: #1e3a8a; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 20px; }
+                button:hover { background: #1e40af; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="icon">
+                    <i class="fas fa-file-contract"></i>
+                </div>
+                <h1>Export Feature Coming Soon!</h1>
+                <p>The contract export functionality is currently under development.</p>
+                <p>You'll soon be able to export contracts to PDF and Excel formats.</p>
+                <button onclick="window.history.back()">Go Back</button>
+            </div>
+        </body>
+        </html>
+        """
+        return HttpResponse(html_content, content_type='text/html')
+
+
+class TestJavaScriptView(OrganizationRequiredMixin, TemplateView):
+    """Test JavaScript modules loading"""
+    template_name = 'procurement/test_js.html'
+
+
+class TestFirefoxLoadingView(OrganizationRequiredMixin, TemplateView):
+    """Test Firefox loading overlay issue"""
+    template_name = 'procurement/test_firefox_loading.html'

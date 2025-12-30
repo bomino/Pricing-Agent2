@@ -1,6 +1,7 @@
-po_number,supplier_name,supplier_code,material_code,material_description,quantity,unit_price,total_price,currency,purchase_date,delivery_date
-PO-2024-001,ABC Suppliers Inc,SUP001,MAT001,Steel Beam 10x10,100,45.50,4550.00,USD,2024-01-15,2024-02-01
-PO-2024-002,XYZ Manufacturing,SUP002,MAT002,Aluminum Sheet 4x8,50,125.00,6250.00,USD,2024-01-16,2024-02-05
-PO-2024-003,ABC Suppliers Inc,SUP001,MAT003,Copper Wire 12AWG,200,8.75,1750.00,USD,2024-01-17,2024-02-03
-PO-2024-004,Global Materials Co,SUP003,MAT001,Steel Beam 10x10,75,44.00,3300.00,USD,2024-01-18,2024-02-10
-PO-2024-005,XYZ Manufacturing,SUP002,MAT004,Plastic Resin Type A,500,2.25,1125.00,USD,2024-01-19,2024-02-07
+po_number,line_item_number,supplier_name,supplier_code,supplier_site,material_code,material_description,material_category,unit_price,quantity,total_price,currency,purchase_date,delivery_date,invoice_date,buyer_name,status,payment_status,notes
+PO-2024-001,1,ArcelorMittal Steel Solutions,AMST001,Chicago IL,STL-W12X26,W12x26 Steel Beam - Grade 50,Structural Steel,125.50,100,12550.00,USD,2024-01-15,2024-02-15,2024-02-20,John Smith,Delivered,Paid,Q1 construction project
+PO-2024-001,2,ArcelorMittal Steel Solutions,AMST001,Chicago IL,STL-W14X30,W14x30 Steel Beam - Grade 50,Structural Steel,132.75,80,10620.00,USD,2024-01-15,2024-02-15,2024-02-20,John Smith,Delivered,Paid,Q1 construction project
+PO-2024-001,3,ArcelorMittal Steel Solutions,AMST001,Chicago IL,STL-W16X36,W16x36 Steel Beam - Grade 50,Structural Steel,145.00,60,8700.00,USD,2024-01-15,2024-02-15,2024-02-20,John Smith,Delivered,Paid,Q1 construction project
+PO-2024-002,1,Nucor Corporation,NUC002,Charlotte NC,RBR-4-GR60,#4 Rebar Grade 60 (1/2 inch),Rebar,850.00,50,42500.00,USD,2024-01-20,2024-02-10,2024-02-12,Sarah Johnson,Delivered,Paid,Phoenix project foundation
+PO-2024-002,2,Nucor Corporation,NUC002,Charlotte NC,RBR-5-GR60,#5 Rebar Grade 60 (5/8 inch),Rebar,950.00,75,71250.00,USD,2024-01-20,2024-02-10,2024-02-12,Sarah Johnson,Delivered,Paid,Phoenix project foundation
+PO-2024-002,3,Nucor Corporation,NUC002,Charlotte NC,RBR-6-GR60,#6 Rebar Grade 60 (3/4 inch),Rebar,1050.00,40,42000.00,USD,2024-01-20,2024-02-10,2024-02-12,Sarah Johnson,Delivered,Paid,Phoenix project foundation

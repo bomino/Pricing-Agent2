@@ -218,12 +218,12 @@
                                    title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <button onclick="createRFQ({{ supplier.id }})"
+                                <button onclick="createRFQ('{{ supplier.id }}')"
                                         class="text-green-600 hover:text-green-900"
                                         title="Create RFQ">
                                     <i class="fas fa-file-invoice"></i>
                                 </button>
-                                <button onclick="viewPerformance({{ supplier.id }})"
+                                <button onclick="viewPerformance('{{ supplier.id }}')"
                                         class="text-purple-600 hover:text-purple-900"
                                         title="Performance">
                                     <i class="fas fa-chart-line"></i>
@@ -286,13 +286,19 @@
 {% block page_scripts %}
 <script>
 function createRFQ(supplierId) {
+    console.log('Creating RFQ for supplier:', supplierId);
     // Navigate to RFQ creation with supplier pre-selected
-    window.location.href = `/procurement/rfqs/create/?supplier=${supplierId}`;
+    const url = `/procurement/rfqs/create/?supplier=${supplierId}`;
+    console.log('Navigating to:', url);
+    window.location.href = url;
 }
 
 function viewPerformance(supplierId) {
+    console.log('Viewing performance for supplier:', supplierId);
     // Navigate to supplier performance page
-    window.location.href = `/procurement/suppliers/${supplierId}/performance/`;
+    const url = `/procurement/suppliers/${supplierId}/performance/`;
+    console.log('Navigating to:', url);
+    window.location.href = url;
 }
 
 function exportSuppliers() {

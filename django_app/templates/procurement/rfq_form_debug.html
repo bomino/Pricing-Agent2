@@ -1,0 +1,316 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}{% if object %}Edit RFQ{% else %}Create RFQ{% endif %} - DEBUG{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .debug-info {
+        background: #f3f4f6;
+        border: 2px dashed #9ca3af;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 0.5rem;
+    }
+    .field-wrapper {
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.5rem;
+    }
+    .field-exists { background: #dcfce7; }
+    .field-missing { background: #fee2e2; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <!-- Debug Info -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div class="debug-info">
+            <h3 class="font-bold text-lg mb-2">Debug Information</h3>
+            <p>Form Class: {{ form.__class__.__name__ }}</p>
+            <p>Form Fields Count: {{ form.fields|length }}</p>
+            <p>Available Fields: {% for field_name in form.fields %}{{ field_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+            <p>Object: {% if object %}{{ object }} (PK: {{ object.pk }}){% else %}New RFQ{% endif %}</p>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <h1 class="text-2xl font-bold text-gray-900">
+                {% if object %}Edit RFQ: {{ object.rfq_number }}{% else %}Create New RFQ{% endif %} (DEBUG MODE)
+            </h1>
+        </div>
+    </div>
+
+    <!-- Main Form Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form method="post" action="">
+            {% csrf_token %}
+
+            <!-- Form Errors -->
+            {% if form.non_field_errors %}
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <h3 class="text-red-800 font-semibold mb-2">Form Errors:</h3>
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+
+            <!-- All Form Fields -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">All Form Fields (Explicit Rendering)</h2>
+
+                <!-- Title Field -->
+                <div class="field-wrapper {% if form.title %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Title {% if form.title.field.required %}*{% endif %}
+                    </label>
+                    {% if form.title %}
+                        {{ form.title }}
+                        {% if form.title.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.title.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'title' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- RFQ Number Field -->
+                <div class="field-wrapper {% if form.rfq_number %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        RFQ Number {% if form.rfq_number.field.required %}*{% endif %}
+                    </label>
+                    {% if form.rfq_number %}
+                        {{ form.rfq_number }}
+                        {% if form.rfq_number.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.rfq_number.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'rfq_number' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Description Field -->
+                <div class="field-wrapper {% if form.description %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Description {% if form.description.field.required %}*{% endif %}
+                    </label>
+                    {% if form.description %}
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.description.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'description' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Department Field -->
+                <div class="field-wrapper {% if form.department %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Department {% if form.department.field.required %}*{% endif %}
+                    </label>
+                    {% if form.department %}
+                        {{ form.department }}
+                        {% if form.department.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.department.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'department' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Cost Center Field -->
+                <div class="field-wrapper {% if form.cost_center %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Cost Center {% if form.cost_center.field.required %}*{% endif %}
+                    </label>
+                    {% if form.cost_center %}
+                        {{ form.cost_center }}
+                        {% if form.cost_center.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.cost_center.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'cost_center' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Deadline Field -->
+                <div class="field-wrapper {% if form.deadline %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Deadline {% if form.deadline.field.required %}*{% endif %}
+                    </label>
+                    {% if form.deadline %}
+                        {{ form.deadline }}
+                        {% if form.deadline.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.deadline.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'deadline' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Required Delivery Date Field -->
+                <div class="field-wrapper {% if form.required_delivery_date %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Required Delivery Date {% if form.required_delivery_date.field.required %}*{% endif %}
+                    </label>
+                    {% if form.required_delivery_date %}
+                        {{ form.required_delivery_date }}
+                        {% if form.required_delivery_date.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.required_delivery_date.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'required_delivery_date' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Payment Terms Field -->
+                <div class="field-wrapper {% if form.payment_terms %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Payment Terms {% if form.payment_terms.field.required %}*{% endif %}
+                    </label>
+                    {% if form.payment_terms %}
+                        {{ form.payment_terms }}
+                        {% if form.payment_terms.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.payment_terms.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'payment_terms' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Delivery Terms Field -->
+                <div class="field-wrapper {% if form.delivery_terms %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Delivery Terms {% if form.delivery_terms.field.required %}*{% endif %}
+                    </label>
+                    {% if form.delivery_terms %}
+                        {{ form.delivery_terms }}
+                        {% if form.delivery_terms.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.delivery_terms.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'delivery_terms' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Terms and Conditions Field -->
+                <div class="field-wrapper {% if form.terms_and_conditions %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Terms and Conditions {% if form.terms_and_conditions.field.required %}*{% endif %}
+                    </label>
+                    {% if form.terms_and_conditions %}
+                        {{ form.terms_and_conditions }}
+                        {% if form.terms_and_conditions.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.terms_and_conditions.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'terms_and_conditions' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Priority Field -->
+                <div class="field-wrapper {% if form.priority %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Priority {% if form.priority.field.required %}*{% endif %}
+                    </label>
+                    {% if form.priority %}
+                        {{ form.priority }}
+                        {% if form.priority.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.priority.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'priority' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Public RFQ Field -->
+                <div class="field-wrapper {% if form.public_rfq %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Public RFQ {% if form.public_rfq.field.required %}*{% endif %}
+                    </label>
+                    {% if form.public_rfq %}
+                        {{ form.public_rfq }}
+                        <span class="ml-2">Make this RFQ public</span>
+                        {% if form.public_rfq.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.public_rfq.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'public_rfq' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Evaluation Criteria Field -->
+                <div class="field-wrapper {% if form.evaluation_criteria %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Evaluation Criteria {% if form.evaluation_criteria.field.required %}*{% endif %}
+                    </label>
+                    {% if form.evaluation_criteria %}
+                        {{ form.evaluation_criteria }}
+                        {% if form.evaluation_criteria.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.evaluation_criteria.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'evaluation_criteria' is missing from form</p>
+                    {% endif %}
+                </div>
+
+                <!-- Status Field -->
+                <div class="field-wrapper {% if form.status %}field-exists{% else %}field-missing{% endif %}">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Status {% if form.status.field.required %}*{% endif %}
+                    </label>
+                    {% if form.status %}
+                        {{ form.status }}
+                        {% if form.status.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.status.errors.0 }}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="text-red-600">Field 'status' is missing from form</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Auto-Rendered Fields (As Fallback) -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-xl font-semibold mb-4">Auto-Rendered Form (Django Default)</h2>
+                {{ form.as_p }}
+            </div>
+
+            <!-- Form Actions -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between">
+                    <a href="{% url 'procurement:rfq_list' %}" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </a>
+                    <button type="submit" class="px-6 py-2 bg-navy-600 text-white rounded-md hover:bg-navy-700">
+                        {% if object %}Update RFQ{% else %}Create RFQ{% endif %}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Apply flatpickr to date fields
+    const dateFields = document.querySelectorAll('input[type="date"], input[type="datetime-local"]');
+    dateFields.forEach(field => {
+        flatpickr(field, {
+            enableTime: field.type === 'datetime-local',
+            dateFormat: field.type === 'datetime-local' ? "Y-m-d H:i" : "Y-m-d",
+            altInput: true,
+            altFormat: field.type === 'datetime-local' ? "F j, Y at h:i K" : "F j, Y"
+        });
+    });
+});
+</script>
+{% endblock %}

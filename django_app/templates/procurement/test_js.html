@@ -1,0 +1,90 @@
+{% extends 'base_modern.html' %}
+{% load static %}
+
+{% block title %}JavaScript Test Page{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="bg-white rounded-lg shadow p-6">
+            <h1 class="text-2xl font-bold text-gray-900 mb-4">JavaScript Module Test</h1>
+
+            <div id="test-results" class="space-y-2">
+                <p>Testing JavaScript modules...</p>
+            </div>
+
+            <div class="mt-6 p-4 bg-gray-100 rounded">
+                <h2 class="font-semibold mb-2">Instructions:</h2>
+                <ol class="list-decimal list-inside space-y-1 text-sm">
+                    <li>Open the browser console (F12)</li>
+                    <li>Look for any red error messages</li>
+                    <li>Check the test results below</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const resultsDiv = document.getElementById('test-results');
+    let results = [];
+
+    // Test 1: Check if window.AppTheme exists
+    if (window.AppTheme) {
+        results.push('<p class="text-green-600">✓ Theme module loaded successfully</p>');
+    } else {
+        results.push('<p class="text-red-600">✗ Theme module failed to load</p>');
+    }
+
+    // Test 2: Check if window.ChartConfig exists
+    if (window.ChartConfig) {
+        results.push('<p class="text-green-600">✓ Chart config module loaded successfully</p>');
+    } else {
+        results.push('<p class="text-red-600">✗ Chart config module failed to load</p>');
+    }
+
+    // Test 3: Check if window.API exists
+    if (window.API) {
+        results.push('<p class="text-green-600">✓ API module loaded successfully</p>');
+    } else {
+        results.push('<p class="text-red-600">✗ API module failed to load</p>');
+    }
+
+    // Test 4: Check if Alpine.js is loaded
+    if (typeof Alpine !== 'undefined') {
+        results.push('<p class="text-green-600">✓ Alpine.js loaded successfully</p>');
+    } else {
+        results.push('<p class="text-red-600">✗ Alpine.js failed to load</p>');
+    }
+
+    // Test 5: Check if HTMX is loaded
+    if (typeof htmx !== 'undefined') {
+        results.push('<p class="text-green-600">✓ HTMX loaded successfully</p>');
+    } else {
+        results.push('<p class="text-red-600">✗ HTMX failed to load</p>');
+    }
+
+    // Test 6: Check if Chart.js is loaded
+    if (typeof Chart !== 'undefined') {
+        results.push('<p class="text-green-600">✓ Chart.js loaded successfully</p>');
+    } else {
+        results.push('<p class="text-red-600">✗ Chart.js failed to load</p>');
+    }
+
+    // Display results
+    resultsDiv.innerHTML = results.join('');
+
+    // Log to console
+    console.log('JavaScript Module Test Results:');
+    console.log('AppTheme:', window.AppTheme);
+    console.log('ChartConfig:', window.ChartConfig);
+    console.log('API:', window.API);
+    console.log('Alpine:', typeof Alpine !== 'undefined' ? 'Loaded' : 'Not loaded');
+    console.log('HTMX:', typeof htmx !== 'undefined' ? 'Loaded' : 'Not loaded');
+    console.log('Chart.js:', typeof Chart !== 'undefined' ? 'Loaded' : 'Not loaded');
+});
+</script>
+{% endblock %}
