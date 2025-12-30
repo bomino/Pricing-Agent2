@@ -33,7 +33,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+    'django.contrib.humanize',  # Added for number formatting
+
     # Third party apps
     'rest_framework',
     'corsheaders',
