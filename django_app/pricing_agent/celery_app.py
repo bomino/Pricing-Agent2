@@ -6,7 +6,7 @@ from celery import Celery
 from django.conf import settings
 
 # Set the default Django settings module for the 'celery' program
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'pricing_agent.settings_local')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'pricing_agent.settings')
 
 # Create Celery app
 app = Celery('pricing_agent')
