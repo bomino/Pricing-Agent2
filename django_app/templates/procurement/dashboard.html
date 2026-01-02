@@ -67,13 +67,13 @@
                 <div class="p-3 bg-blue-100 rounded-full">
                     <i class="fas fa-dollar-sign text-blue-600 text-xl"></i>
                 </div>
-                <span class="trend-up text-sm font-medium">
-                    <i class="fas fa-arrow-up mr-1"></i> 12%
+                <span class="{% if metrics.spend_trend >= 0 %}trend-up{% else %}trend-down{% endif %} text-sm font-medium">
+                    <i class="fas fa-arrow-{% if metrics.spend_trend >= 0 %}up{% else %}down{% endif %} mr-1"></i> {{ metrics.spend_trend|floatformat:1|default:"0" }}%
                 </span>
             </div>
             <h3 class="text-sm font-medium text-gray-600">Total Spend</h3>
-            <p class="text-2xl font-bold text-gray-900 mt-1">${{ metrics.total_spend|floatformat:0|default:"2.4M" }}</p>
-            <p class="text-xs text-gray-500 mt-2">vs. last period: +$285K</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">${{ metrics.total_spend|floatformat:0|default:"0" }}</p>
+            <p class="text-xs text-gray-500 mt-2">vs. last period: ${{ metrics.previous_spend|floatformat:0|default:"0" }}</p>
         </div>
 
         <!-- Active RFQs -->
@@ -83,12 +83,12 @@
                     <i class="fas fa-file-alt text-green-600 text-xl"></i>
                 </div>
                 <span class="trend-neutral text-sm font-medium">
-                    <i class="fas fa-minus mr-1"></i> 0%
+                    <i class="fas fa-file-alt mr-1"></i> Active
                 </span>
             </div>
             <h3 class="text-sm font-medium text-gray-600">Active RFQs</h3>
-            <p class="text-2xl font-bold text-gray-900 mt-1">{{ metrics.active_rfqs|default:24 }}</p>
-            <p class="text-xs text-gray-500 mt-2">{{ metrics.pending_quotes|default:8 }} awaiting responses</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">{{ metrics.active_rfqs|default:0 }}</p>
+            <p class="text-xs text-gray-500 mt-2">{{ metrics.pending_quotes|default:0 }} awaiting responses</p>
         </div>
 
         <!-- Cost Savings -->
@@ -97,13 +97,13 @@
                 <div class="p-3 bg-purple-100 rounded-full">
                     <i class="fas fa-piggy-bank text-purple-600 text-xl"></i>
                 </div>
-                <span class="trend-up text-sm font-medium">
-                    <i class="fas fa-arrow-up mr-1"></i> 18%
+                <span class="trend-neutral text-sm font-medium">
+                    <i class="fas fa-chart-line mr-1"></i> Track
                 </span>
             </div>
             <h3 class="text-sm font-medium text-gray-600">Cost Savings</h3>
-            <p class="text-2xl font-bold text-gray-900 mt-1">${{ metrics.cost_savings|floatformat:0|default:"145K" }}</p>
-            <p class="text-xs text-gray-500 mt-2">6.2% of total spend</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">${{ metrics.cost_savings|floatformat:0|default:"0" }}</p>
+            <p class="text-xs text-gray-500 mt-2">{% if metrics.total_spend > 0 %}{{ metrics.cost_savings|divisibleby:metrics.total_spend|default:"0" }}% of total spend{% else %}Based on quote comparisons{% endif %}</p>
         </div>
 
         <!-- Supplier Performance -->
@@ -112,13 +112,13 @@
                 <div class="p-3 bg-orange-100 rounded-full">
                     <i class="fas fa-star text-orange-600 text-xl"></i>
                 </div>
-                <span class="trend-up text-sm font-medium">
-                    <i class="fas fa-arrow-up mr-1"></i> 5%
+                <span class="trend-neutral text-sm font-medium">
+                    <i class="fas fa-star mr-1"></i> Rating
                 </span>
             </div>
             <h3 class="text-sm font-medium text-gray-600">Avg Supplier Rating</h3>
-            <p class="text-2xl font-bold text-gray-900 mt-1">4.3<span class="text-lg text-gray-500">/5</span></p>
-            <p class="text-xs text-gray-500 mt-2">{{ metrics.total_suppliers|default:156 }} active suppliers</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">{{ metrics.avg_supplier_rating|floatformat:1|default:"0.0" }}<span class="text-lg text-gray-500">/5</span></p>
+            <p class="text-xs text-gray-500 mt-2">{{ metrics.total_suppliers|default:0 }} active suppliers</p>
         </div>
     </div>
 

@@ -32,28 +32,62 @@ class SupplierListView(OrganizationRequiredMixin, ListView):
     template_name = 'procurement/supplier_list.html'
     context_object_name = 'suppliers'
     paginate_by = 20
-    
+
     def get_queryset(self):
         # Get organization from user profile if it exists
         organization = self.get_user_organization()
         if not organization:
             return Supplier.objects.none()
-        
+
+        # Start with all suppliers for this organization
         queryset = Supplier.objects.filter(
-            organization=organization,
-            status='active'
+            organization=organization
         ).order_by('name')
-        
+
+        # Filter by status if provided
+        status_filter = self.request.GET.get('status')
+        if status_filter and status_filter != 'all':
+            queryset = queryset.filter(status=status_filter)
+
+        # Filter by supplier type if provided
+        type_filter = self.request.GET.get('type')
+        if type_filter and type_filter != 'all':
+            queryset = queryset.filter(supplier_type=type_filter)
+
+        # Filter by risk level if provided
+        risk_filter = self.request.GET.get('risk')
+        if risk_filter and risk_filter != 'all':
+            queryset = queryset.filter(risk_level=risk_filter)
+
         # Add search functionality
         search = self.request.GET.get('search')
         if search:
             queryset = queryset.filter(
                 Q(name__icontains=search) |
-                Q(contact_email__icontains=search) |
-                Q(category__icontains=search)
+                Q(primary_contact_email__icontains=search) |
+                Q(code__icontains=search)
             )
-        
+
         return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        organization = self.get_user_organization()
+
+        # Get counts for all suppliers (not just filtered)
+        all_suppliers = Supplier.objects.filter(organization=organization)
+        context['total_suppliers'] = all_suppliers.count()
+        context['active_suppliers'] = all_suppliers.filter(status='active').count()
+        context['avg_rating'] = all_suppliers.filter(rating__gt=0).aggregate(avg=Avg('rating'))['avg'] or 0
+        context['categories_count'] = Category.objects.filter(organization=organization, is_active=True).count()
+
+        # Pass current filter values to template
+        context['current_status'] = self.request.GET.get('status', 'all')
+        context['current_type'] = self.request.GET.get('type', 'all')
+        context['current_risk'] = self.request.GET.get('risk', 'all')
+        context['current_search'] = self.request.GET.get('search', '')
+
+        return context
 
 
 class SupplierDetailView(OrganizationRequiredMixin, DetailView):
@@ -137,11 +171,61 @@ class RFQListView(OrganizationRequiredMixin, ListView):
     template_name = 'procurement/rfq_list.html'
     context_object_name = 'rfqs'
     paginate_by = 20
-    
+
     def get_queryset(self):
-        return RFQ.objects.filter(
-            organization=self.get_user_organization()
+        organization = self.get_user_organization()
+        if not organization:
+            return RFQ.objects.none()
+
+        queryset = RFQ.objects.filter(
+            organization=organization
         ).order_by('-created_at')
+
+        # Apply filters
+        status_filter = self.request.GET.get('status')
+        if status_filter and status_filter != 'all':
+            queryset = queryset.filter(status=status_filter)
+
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(rfq_number__icontains=search) |
+                Q(title__icontains=search) |
+                Q(description__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        organization = self.get_user_organization()
+
+        # Get all RFQs for stats (not filtered)
+        all_rfqs = RFQ.objects.filter(organization=organization)
+
+        # Stats
+        context['total_rfqs'] = all_rfqs.count()
+        context['open_rfqs'] = all_rfqs.filter(status__in=['open', 'published']).count()
+        context['draft_rfqs'] = all_rfqs.filter(status='draft').count()
+        context['awarded_rfqs'] = all_rfqs.filter(status='awarded').count()
+
+        # Count pending quotes (quotes in under_review status for this org's RFQs)
+        context['pending_quotes'] = Quote.objects.filter(
+            organization=organization,
+            status='under_review'
+        ).count()
+
+        # Count unique suppliers invited across all RFQs
+        context['total_suppliers'] = Supplier.objects.filter(
+            organization=organization,
+            invited_rfqs__isnull=False
+        ).distinct().count()
+
+        # Pass filter values
+        context['current_status'] = self.request.GET.get('status', 'all')
+        context['current_search'] = self.request.GET.get('search', '')
+
+        return context
 
 
 class RFQDetailView(OrganizationRequiredMixin, DetailView):
@@ -330,11 +414,65 @@ class QuoteListView(OrganizationRequiredMixin, ListView):
     template_name = 'procurement/quote_list.html'
     context_object_name = 'quotes'
     paginate_by = 20
-    
+
     def get_queryset(self):
-        return Quote.objects.filter(
-            organization=self.get_user_organization()
+        organization = self.get_user_organization()
+        if not organization:
+            return Quote.objects.none()
+
+        queryset = Quote.objects.filter(
+            organization=organization
         ).select_related('rfq', 'supplier').order_by('-created_at')
+
+        # Apply filters
+        status_filter = self.request.GET.get('status')
+        if status_filter and status_filter != 'all':
+            queryset = queryset.filter(status=status_filter)
+
+        rfq_filter = self.request.GET.get('rfq')
+        if rfq_filter and rfq_filter != 'all':
+            queryset = queryset.filter(rfq_id=rfq_filter)
+
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(quote_number__icontains=search) |
+                Q(supplier__name__icontains=search) |
+                Q(rfq__rfq_number__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        organization = self.get_user_organization()
+
+        # Get all quotes for stats (not filtered)
+        all_quotes = Quote.objects.filter(organization=organization)
+
+        # Stats
+        context['total_quotes'] = all_quotes.count()
+        context['under_review'] = all_quotes.filter(status='under_review').count()
+        context['approved_quotes'] = all_quotes.filter(status__in=['accepted', 'approved']).count()
+        context['total_value'] = all_quotes.aggregate(total=Sum('total_amount'))['total'] or 0
+
+        # Calculate avg savings (comparing to RFQ estimated amounts if available)
+        # For now, calculate based on quotes with scores
+        scored_quotes = all_quotes.filter(commercial_score__isnull=False)
+        if scored_quotes.exists():
+            context['avg_savings'] = scored_quotes.aggregate(avg=Avg('commercial_score'))['avg'] or 0
+        else:
+            context['avg_savings'] = 0
+
+        # Pass filter values
+        context['current_status'] = self.request.GET.get('status', 'all')
+        context['current_rfq'] = self.request.GET.get('rfq', 'all')
+        context['current_search'] = self.request.GET.get('search', '')
+
+        # Get RFQs for filter dropdown
+        context['rfqs'] = RFQ.objects.filter(organization=organization).order_by('-created_at')[:50]
+
+        return context
 
 
 class QuoteDetailView(OrganizationRequiredMixin, DetailView):
@@ -420,7 +558,7 @@ class ContractListView(OrganizationRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
+
         # Get contract statistics
         contracts = self.get_queryset()
         context['stats'] = {
@@ -431,11 +569,28 @@ class ContractListView(OrganizationRequiredMixin, ListView):
                 end_date__lte=timezone.now() + timedelta(days=30),
                 end_date__gte=timezone.now()
             ).count(),
-            'total_value': contracts.filter(status='active').aggregate(
+            'total_value': contracts.aggregate(
                 total=Sum('total_value')
             )['total'] or 0,
         }
-        
+
+        # Calculate average duration in months
+        contracts_with_dates = contracts.filter(
+            start_date__isnull=False,
+            end_date__isnull=False
+        )
+        if contracts_with_dates.exists():
+            total_months = 0
+            count = 0
+            for c in contracts_with_dates:
+                if c.start_date and c.end_date:
+                    duration_days = (c.end_date - c.start_date).days
+                    total_months += duration_days / 30
+                    count += 1
+            context['avg_duration'] = round(total_months / count) if count > 0 else 0
+        else:
+            context['avg_duration'] = 0
+
         return context
 
 
@@ -686,13 +841,41 @@ class QuoteComparisonView(OrganizationRequiredMixin, TemplateView):
 class ProcurementDashboardView(OrganizationRequiredMixin, TemplateView):
     """Procurement dashboard with key metrics"""
     template_name = 'procurement/dashboard.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         organization = self.get_user_organization()
         now = timezone.now()
         thirty_days_ago = now - timedelta(days=30)
-        
+        sixty_days_ago = now - timedelta(days=60)
+
+        # Calculate total spend from accepted quotes
+        current_spend = Quote.objects.filter(
+            organization=organization,
+            status__in=['accepted', 'approved'],
+            created_at__gte=thirty_days_ago
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+        previous_spend = Quote.objects.filter(
+            organization=organization,
+            status__in=['accepted', 'approved'],
+            created_at__gte=sixty_days_ago,
+            created_at__lt=thirty_days_ago
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+        # Calculate spend trend
+        if previous_spend > 0:
+            spend_trend = ((current_spend - previous_spend) / previous_spend) * 100
+        else:
+            spend_trend = 0
+
+        # Calculate avg supplier rating
+        avg_rating = Supplier.objects.filter(
+            organization=organization,
+            status='active',
+            rating__gt=0
+        ).aggregate(avg=Avg('rating'))['avg'] or 0
+
         # Get key metrics
         context['metrics'] = {
             'total_suppliers': Supplier.objects.filter(
@@ -704,19 +887,13 @@ class ProcurementDashboardView(OrganizationRequiredMixin, TemplateView):
             ).count(),
             'pending_quotes': Quote.objects.filter(
                 organization=organization,
-                status='submitted'
+                status__in=['submitted', 'under_review']
             ).count(),
-            'total_quote_value': Quote.objects.filter(
-                organization=organization,
-                status='approved',
-                created_at__gte=thirty_days_ago
-            ).aggregate(total=Sum('total_value'))['total'] or 0,
-            'total_spend': Quote.objects.filter(
-                organization=organization,
-                status='approved',
-                created_at__gte=thirty_days_ago
-            ).aggregate(total=Sum('total_value'))['total'] or 0,
-            'cost_savings': 145000,  # Placeholder - would calculate from quote comparisons
+            'total_spend': current_spend,
+            'spend_trend': round(spend_trend, 1),
+            'previous_spend': previous_spend,
+            'avg_supplier_rating': round(avg_rating, 1) if avg_rating else 0,
+            'cost_savings': 0,  # Would need actual calculation from quote vs budget comparisons
         }
         
         # Get recent RFQs

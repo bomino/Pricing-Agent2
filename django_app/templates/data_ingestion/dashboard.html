@@ -123,21 +123,15 @@
                     <p class="text-sm text-gray-600">Success Rate</p>
                     <p class="text-2xl font-bold text-navy-900 mt-1">
                         {% if upload_stats.total_uploads > 0 %}
-                            {{ upload_stats.successful|default:0|floatformat:0|add:"00"|slice:"-2:" }}%
+                            {{ upload_stats.success_rate|floatformat:0 }}%
                         {% else %}
                             N/A
                         {% endif %}
                     </p>
                     <p class="text-xs text-gray-500 mt-2">Processing success</p>
                 </div>
-                <div class="relative">
-                    <svg class="w-16 h-16">
-                        <circle cx="32" cy="32" r="28" stroke="#e5e7eb" stroke-width="4" fill="none"/>
-                        <circle cx="32" cy="32" r="28" stroke="#243b53" stroke-width="4" fill="none"
-                                class="progress-ring"
-                                stroke-dasharray="176"
-                                stroke-dashoffset="{% if upload_stats.total_uploads > 0 %}{{ 176|add:"-"|add:upload_stats.successful|default:0|floatformat:0|add:"00"|slice:"-2:"|add:"76"|slice:"-3:" }}{% else %}176{% endif %}"/>
-                    </svg>
+                <div class="p-3 bg-purple-100 rounded-lg">
+                    <i class="fas fa-chart-pie text-purple-600 text-2xl"></i>
                 </div>
             </div>
         </div>

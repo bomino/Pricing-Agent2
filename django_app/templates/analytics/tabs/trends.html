@@ -6,53 +6,53 @@
         <div class="text-center">
             <i class="fas fa-chart-line text-4xl text-blue-600 mb-3"></i>
             <h4 class="font-semibold text-lg mb-2">Monthly Spend</h4>
-            <p class="text-3xl font-bold text-blue-600 mb-2">$52,500</p>
-            <p class="text-sm text-gray-600">Average per month</p>
+            <p class="text-3xl font-bold text-blue-600 mb-2">${{ metrics.monthly_spend|floatformat:0|default:"0" }}</p>
+            <p class="text-sm text-gray-600">This month</p>
             <div class="mt-2">
-                <span class="text-xs text-green-600">
-                    <i class="fas fa-arrow-up mr-1"></i>+8.3% vs last period
+                <span class="text-xs {% if metrics.spend_trend >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+                    <i class="fas fa-arrow-{% if metrics.spend_trend >= 0 %}up{% else %}down{% endif %} mr-1"></i>{{ metrics.spend_trend|floatformat:1|default:"0" }}% vs last period
                 </span>
             </div>
         </div>
     </div>
-    
+
     <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
         <div class="text-center">
             <i class="fas fa-piggy-bank text-4xl text-green-600 mb-3"></i>
-            <h4 class="font-semibold text-lg mb-2">Cost Savings</h4>
-            <p class="text-3xl font-bold text-green-600 mb-2">$8,750</p>
-            <p class="text-sm text-gray-600">This quarter</p>
+            <h4 class="font-semibold text-lg mb-2">Accepted Quotes</h4>
+            <p class="text-3xl font-bold text-green-600 mb-2">${{ metrics.savings_this_quarter|floatformat:0|default:"0" }}</p>
+            <p class="text-sm text-gray-600">This month</p>
             <div class="mt-2">
-                <span class="text-xs text-green-600">
-                    <i class="fas fa-arrow-up mr-1"></i>+12.5% improvement
+                <span class="text-xs text-gray-600">
+                    <i class="fas fa-file-invoice-dollar mr-1"></i>From approved quotes
                 </span>
             </div>
         </div>
     </div>
-    
+
     <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
         <div class="text-center">
             <i class="fas fa-box text-4xl text-purple-600 mb-3"></i>
             <h4 class="font-semibold text-lg mb-2">Order Volume</h4>
-            <p class="text-3xl font-bold text-purple-600 mb-2">247</p>
+            <p class="text-3xl font-bold text-purple-600 mb-2">{{ metrics.orders_this_month|default:"0" }}</p>
             <p class="text-sm text-gray-600">Orders this month</p>
             <div class="mt-2">
-                <span class="text-xs text-red-600">
-                    <i class="fas fa-arrow-down mr-1"></i>-5.2% reduction
+                <span class="text-xs {% if metrics.order_trend >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+                    <i class="fas fa-arrow-{% if metrics.order_trend >= 0 %}up{% else %}down{% endif %} mr-1"></i>{{ metrics.order_trend|floatformat:1|default:"0" }}% change
                 </span>
             </div>
         </div>
     </div>
-    
+
     <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
         <div class="text-center">
             <i class="fas fa-dollar-sign text-4xl text-orange-600 mb-3"></i>
             <h4 class="font-semibold text-lg mb-2">Avg Order Value</h4>
-            <p class="text-3xl font-bold text-orange-600 mb-2">$212</p>
+            <p class="text-3xl font-bold text-orange-600 mb-2">${{ metrics.avg_order_value|floatformat:0|default:"0" }}</p>
             <p class="text-sm text-gray-600">Per transaction</p>
             <div class="mt-2">
-                <span class="text-xs text-green-600">
-                    <i class="fas fa-arrow-up mr-1"></i>+14.1% increase
+                <span class="text-xs text-gray-600">
+                    <i class="fas fa-calculator mr-1"></i>Based on PO totals
                 </span>
             </div>
         </div>
@@ -97,7 +97,7 @@
             {% for category in category_spend|slice:":5" %}
             <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
                 <span class="text-sm font-medium text-gray-700">
-                    {{ category.lines__material__category|default:"Uncategorized" }}
+                    {{ category.lines__material__category__name|default:"Uncategorized" }}
                 </span>
                 <div class="flex items-center gap-3">
                     <span class="text-sm font-bold text-navy-900">
@@ -107,6 +107,11 @@
                         ({{ category.order_count }} orders)
                     </span>
                 </div>
+            </div>
+            {% empty %}
+            <div class="text-center text-gray-500 py-4">
+                <i class="fas fa-chart-pie text-2xl mb-2"></i>
+                <p>No category data available</p>
             </div>
             {% endfor %}
         </div>

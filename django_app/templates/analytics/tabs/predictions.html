@@ -6,7 +6,9 @@
         <div class="text-center">
             <i class="fas fa-chart-line text-4xl text-purple-600 mb-3"></i>
             <h4 class="font-semibold text-lg mb-2">Price Forecast</h4>
-            <p class="text-3xl font-bold text-purple-600 mb-2">+5.2%</p>
+            <p class="text-3xl font-bold {% if prediction_metrics.avg_price_change >= 0 %}text-red-600{% else %}text-green-600{% endif %} mb-2">
+                {% if prediction_metrics.avg_price_change >= 0 %}+{% endif %}{{ prediction_metrics.avg_price_change|floatformat:1|default:"0" }}%
+            </p>
             <p class="text-sm text-gray-600">Avg predicted change</p>
             <div class="mt-4">
                 <button class="text-sm text-purple-600 hover:text-purple-700 font-medium"
@@ -17,13 +19,13 @@
             </div>
         </div>
     </div>
-    
+
     <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
         <div class="text-center">
             <i class="fas fa-box text-4xl text-indigo-600 mb-3"></i>
             <h4 class="font-semibold text-lg mb-2">Demand Forecast</h4>
-            <p class="text-3xl font-bold text-indigo-600 mb-2">1,280</p>
-            <p class="text-sm text-gray-600">Units next month</p>
+            <p class="text-3xl font-bold text-indigo-600 mb-2">{{ prediction_metrics.demand_forecast|default:"0" }}</p>
+            <p class="text-sm text-gray-600">Orders next month</p>
             <div class="mt-4">
                 <button class="text-sm text-indigo-600 hover:text-indigo-700 font-medium"
                         hx-get="/analytics/predictions/demand-details/"
@@ -33,12 +35,12 @@
             </div>
         </div>
     </div>
-    
+
     <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
         <div class="text-center">
             <i class="fas fa-percentage text-4xl text-green-600 mb-3"></i>
             <h4 class="font-semibold text-lg mb-2">Model Accuracy</h4>
-            <p class="text-3xl font-bold text-green-600 mb-2">87.3%</p>
+            <p class="text-3xl font-bold text-green-600 mb-2">{{ prediction_metrics.model_accuracy|floatformat:1|default:"0" }}%</p>
             <p class="text-sm text-gray-600">Last 30 days</p>
             <div class="mt-4">
                 <button class="text-sm text-green-600 hover:text-green-700 font-medium"
@@ -49,12 +51,12 @@
             </div>
         </div>
     </div>
-    
+
     <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
         <div class="text-center">
             <i class="fas fa-exclamation-triangle text-4xl text-orange-600 mb-3"></i>
             <h4 class="font-semibold text-lg mb-2">Risk Alerts</h4>
-            <p class="text-3xl font-bold text-orange-600 mb-2">3</p>
+            <p class="text-3xl font-bold text-orange-600 mb-2">{{ prediction_metrics.risk_alerts|default:"0" }}</p>
             <p class="text-sm text-gray-600">High priority</p>
             <div class="mt-4">
                 <button class="text-sm text-orange-600 hover:text-orange-700 font-medium"
@@ -152,11 +154,11 @@
         <div class="grid grid-cols-2 gap-2 text-sm">
             <div class="p-2 bg-gray-50 rounded">
                 <span class="text-gray-600">Accuracy:</span>
-                <span class="font-semibold text-green-600 float-right">87.3%</span>
+                <span class="font-semibold text-green-600 float-right">{{ prediction_metrics.model_accuracy|floatformat:1|default:"0" }}%</span>
             </div>
             <div class="p-2 bg-gray-50 rounded">
                 <span class="text-gray-600">Last Updated:</span>
-                <span class="font-semibold float-right">2 hrs ago</span>
+                <span class="font-semibold float-right">Just now</span>
             </div>
         </div>
     </div>

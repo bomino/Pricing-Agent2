@@ -13,8 +13,8 @@
     
     <!-- Key Metrics -->
     <div class="data-grid data-grid-4 mb-8">
-        {% include 'components/metric_card.html' with title="Total Spend (MTD)" value=metrics.total_spend_mtd format="currency" trend="up" trend_value="12.5" trend_label="vs last month" icon="dollar-sign" color="navy" %}
-        {% include 'components/metric_card.html' with title="Active RFQs" value=metrics.active_rfqs format="number" trend="neutral" trend_value="0" trend_label="active" icon="file-invoice" color="cyan" %}
+        {% include 'components/metric_card.html' with title="Total Spend (MTD)" value=metrics.total_spend_mtd format="currency" trend="up" trend_value=metrics.spend_trend_pct trend_label="vs last month" icon="dollar-sign" color="navy" %}
+        {% include 'components/metric_card.html' with title="Active RFQs" value=metrics.active_rfqs format="number" trend="neutral" trend_value=metrics.active_rfqs trend_label="active" icon="file-invoice" color="cyan" %}
         {% include 'components/metric_card.html' with title="Active Suppliers" value=metrics.active_suppliers format="number" trend="up" trend_value=recent_activity.new_suppliers trend_label="new this week" icon="truck" color="teal" %}
         {% include 'components/metric_card.html' with title="Cost Savings (YTD)" value=metrics.cost_savings_ytd format="percent" trend="up" trend_value=metrics.cost_savings_ytd trend_label="potential savings" icon="piggy-bank" color="emerald" %}
     </div>

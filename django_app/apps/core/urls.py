@@ -10,7 +10,10 @@ from .auth_views import (
     LoginView, LogoutView, RegisterView, 
     PasswordResetView, ProfileView, UserManagementView
 )
-from .views import DashboardView
+from .views import (
+    DashboardView, recent_rfqs_api, price_alerts_api,
+    notifications_list_api, notifications_unread_count_api, notifications_mark_all_read_api
+)
 
 app_name = 'core'
 
@@ -43,4 +46,13 @@ urlpatterns = [
     # Dashboard views
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     path('dashboard/old/', TemplateView.as_view(template_name='dashboard_old.html'), name='dashboard_old'),
+
+    # Dashboard API endpoints (for HTMX)
+    path('api/dashboard/recent-rfqs/', recent_rfqs_api, name='recent_rfqs_api'),
+    path('api/dashboard/price-alerts/', price_alerts_api, name='price_alerts_api'),
+
+    # Notification API endpoints (for header HTMX polling)
+    path('api/notifications/', notifications_list_api, name='notifications_list_api'),
+    path('api/notifications/unread-count/', notifications_unread_count_api, name='notifications_unread_count_api'),
+    path('api/notifications/mark-all-read/', notifications_mark_all_read_api, name='notifications_mark_all_read_api'),
 ]

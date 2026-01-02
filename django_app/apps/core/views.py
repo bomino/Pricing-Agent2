@@ -76,13 +76,28 @@ class DashboardView(OrganizationRequiredMixin, TemplateView):
             order_date__gte=start_of_month.date(),
             order_date__lte=now.date()
         ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
-        
+
+        # Calculate previous month spend for trend calculation
+        prev_month_start = (start_of_month - timedelta(days=1)).replace(day=1)
+        prev_month_end = start_of_month - timedelta(days=1)
+        total_spend_prev_month = PurchaseOrder.objects.filter(
+            organization=organization,
+            order_date__gte=prev_month_start.date(),
+            order_date__lte=prev_month_end.date()
+        ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+
+        # Calculate spend trend percentage
+        if total_spend_prev_month > 0:
+            spend_trend_pct = ((float(total_spend_mtd) - float(total_spend_prev_month)) / float(total_spend_prev_month)) * 100
+        else:
+            spend_trend_pct = 0
+
         # Active RFQs count
         active_rfqs = RFQ.objects.filter(
             organization=organization,
             status__in=['published', 'open', 'active']
         ).count()
-        
+
         # Active Suppliers count
         active_suppliers = Supplier.objects.filter(
             organization=organization,
@@ -157,6 +172,7 @@ class DashboardView(OrganizationRequiredMixin, TemplateView):
             'metrics': {
                 'total_spend_mtd': float(total_spend_mtd),
                 'total_spend_ytd': float(ytd_spend),
+                'spend_trend_pct': round(spend_trend_pct, 1),
                 'active_rfqs': active_rfqs,
                 'active_suppliers': active_suppliers,
                 'cost_savings_ytd': cost_savings_ytd,
@@ -247,10 +263,104 @@ class HealthCheckView(APIView):
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
+@api_view(['GET'])
+def recent_rfqs_api(request):
+    """API endpoint for recent RFQs - used by dashboard HTMX"""
+    from apps.procurement.models import RFQ
+    from apps.core.mixins import get_user_organization
+
+    organization = get_user_organization(request.user)
+    if not organization:
+        return Response('<tr><td colspan="5" class="text-center py-4 text-gray-500">No organization found</td></tr>')
+
+    rfqs = RFQ.objects.filter(organization=organization).order_by('-created_at')[:5]
+
+    if not rfqs.exists():
+        html = '<tr><td colspan="5" class="text-center py-8 text-gray-500"><i class="fas fa-file-invoice text-4xl mb-3"></i><p>No RFQs found</p></td></tr>'
+        return HttpResponse(html)
+
+    html = ''
+    for rfq in rfqs:
+        status_colors = {
+            'draft': 'bg-gray-100 text-gray-800',
+            'open': 'bg-blue-100 text-blue-800',
+            'published': 'bg-green-100 text-green-800',
+            'closed': 'bg-yellow-100 text-yellow-800',
+            'awarded': 'bg-purple-100 text-purple-800',
+            'cancelled': 'bg-red-100 text-red-800',
+        }
+        status_class = status_colors.get(rfq.status, 'bg-gray-100 text-gray-800')
+        deadline = rfq.deadline.strftime('%b %d, %Y') if rfq.deadline else 'No deadline'
+
+        html += f'''
+        <tr class="hover:bg-gray-50">
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-navy-600">{rfq.rfq_number}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{rfq.title[:30]}...</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 py-1 text-xs rounded-full {status_class}">{rfq.get_status_display()}</span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{deadline}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">
+                <a href="/procurement/rfqs/{rfq.id}/" class="text-navy-600 hover:text-navy-800">View</a>
+            </td>
+        </tr>
+        '''
+
+    return HttpResponse(html)
+
+
+@api_view(['GET'])
+def price_alerts_api(request):
+    """API endpoint for price alerts - used by dashboard HTMX"""
+    from apps.analytics.models import Alert
+    from apps.core.mixins import get_user_organization
+
+    organization = get_user_organization(request.user)
+    if not organization:
+        return HttpResponse('<div class="text-center text-gray-500 py-4">No organization found</div>')
+
+    # Filter by status='active' (not is_active - Alert model uses status field)
+    alerts = Alert.objects.filter(organization=organization, status='active').order_by('-created_at')[:5]
+
+    if not alerts.exists():
+        html = '''
+        <div class="text-center py-8 text-gray-500">
+            <i class="fas fa-bell-slash text-4xl mb-3"></i>
+            <p>No active alerts</p>
+            <p class="text-sm mt-2">Price alerts will appear here when triggered</p>
+        </div>
+        '''
+        return HttpResponse(html)
+
+    html = ''
+    for alert in alerts:
+        severity_colors = {
+            'low': 'border-blue-500 bg-blue-50',
+            'medium': 'border-yellow-500 bg-yellow-50',
+            'high': 'border-orange-500 bg-orange-50',
+            'critical': 'border-red-500 bg-red-50',
+        }
+        severity_class = severity_colors.get(alert.severity, 'border-gray-500 bg-gray-50')
+
+        html += f'''
+        <div class="p-3 border-l-4 {severity_class} rounded-r-lg">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="font-medium text-gray-900">{alert.title}</p>
+                    <p class="text-sm text-gray-600 mt-1">{alert.message[:50]}...</p>
+                </div>
+                <span class="text-xs text-gray-500">{alert.created_at.strftime('%b %d')}</span>
+            </div>
+        </div>
+        '''
+
+    return HttpResponse(html)
+
+
 class APIRootView(APIView):
     """API root endpoint with service information"""
     permission_classes = []
-    
+
     def get(self, request):
         """Return API information"""
         return Response({
@@ -472,7 +582,91 @@ class OrganizationDetailView(DetailView):
     """Organization detail view"""
     template_name = 'core/organization_detail.html'
     context_object_name = 'organization'
-    
+
     def get_queryset(self):
         from apps.core.models import Organization
         return Organization.objects.filter(is_active=True)
+
+
+# Notification API endpoints (for header HTMX polling)
+@api_view(['GET'])
+def notifications_list_api(request):
+    """API endpoint for notifications list - used by header HTMX"""
+    from apps.core.models import Notification
+
+    if not request.user.is_authenticated:
+        return HttpResponse('')
+
+    organization = get_user_organization(request.user)
+    if not organization:
+        return HttpResponse('<div class="p-4 text-center text-gray-500">No notifications</div>')
+
+    try:
+        notifications = Notification.objects.filter(
+            user=request.user,
+            is_read=False
+        ).order_by('-created_at')[:10]
+    except Exception:
+        # Model may not exist or have different structure
+        notifications = []
+
+    if not notifications:
+        return HttpResponse('''
+        <div class="p-4 text-center text-gray-500">
+            <i class="fas fa-bell-slash text-2xl mb-2"></i>
+            <p class="text-sm">No new notifications</p>
+        </div>
+        ''')
+
+    html = ''
+    for notification in notifications:
+        html += f'''
+        <div class="p-3 hover:bg-gray-50 border-b border-gray-100">
+            <p class="text-sm text-gray-900">{notification.message}</p>
+            <p class="text-xs text-gray-500 mt-1">{notification.created_at.strftime('%b %d, %H:%M')}</p>
+        </div>
+        '''
+
+    return HttpResponse(html)
+
+
+@api_view(['GET'])
+def notifications_unread_count_api(request):
+    """API endpoint for unread notification count - used by header HTMX"""
+    from apps.core.models import Notification
+
+    if not request.user.is_authenticated:
+        return HttpResponse('0')
+
+    try:
+        count = Notification.objects.filter(
+            user=request.user,
+            is_read=False
+        ).count()
+    except Exception:
+        # Model may not exist or have different structure
+        count = 0
+
+    if count > 0:
+        return HttpResponse(f'<span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">{count if count < 100 else "99+"}</span>')
+    else:
+        return HttpResponse('')
+
+
+@api_view(['POST'])
+def notifications_mark_all_read_api(request):
+    """API endpoint to mark all notifications as read"""
+    from apps.core.models import Notification
+
+    if not request.user.is_authenticated:
+        return HttpResponse('')
+
+    try:
+        Notification.objects.filter(
+            user=request.user,
+            is_read=False
+        ).update(is_read=True)
+    except Exception:
+        pass
+
+    return HttpResponse('<span class="text-sm text-gray-500">All notifications marked as read</span>')

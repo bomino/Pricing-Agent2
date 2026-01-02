@@ -8,7 +8,7 @@ from django.views.generic import (
     ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView, View
 )
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Q, Avg, Count, Max, Min, StdDev
+from django.db.models import Q, Avg, Count, Max, Min, StdDev, Sum
 from django.utils import timezone
 from django.urls import reverse_lazy
 from rest_framework import viewsets, status
@@ -99,29 +99,98 @@ class MaterialDetailView(OrganizationRequiredMixin, DetailView):
     model = Material
     template_name = 'pricing/material_detail.html'
     context_object_name = 'material'
-    
+
     def get_queryset(self):
         return Material.objects.filter(
             organization=self.get_user_organization()
         )
-    
+
     def get_context_data(self, **kwargs):
+        import json
+        from apps.procurement.models import PurchaseOrderLine
+
         context = super().get_context_data(**kwargs)
-        # Get recent prices for this material
-        context['recent_prices'] = Price.objects.filter(
-            material=self.object
-        ).order_by('-time')[:10]
-        
-        # Get price statistics
+        organization = self.get_user_organization()
+        material = self.object
+
+        # Get current price (most recent)
+        latest_price = Price.objects.filter(
+            material=material,
+            organization=organization
+        ).order_by('-time').first()
+        context['current_price'] = float(latest_price.price) if latest_price else 0
+
+        # Get price statistics for last 30 days
+        thirty_days_ago = timezone.now() - timezone.timedelta(days=30)
         price_stats = Price.objects.filter(
-            material=self.object,
-            time__gte=timezone.now() - timezone.timedelta(days=30)
+            material=material,
+            organization=organization,
+            time__gte=thirty_days_ago
         ).aggregate(
             avg_price=Avg('price'),
             count=Count('id')
         )
-        context['price_stats'] = price_stats
-        
+        context['avg_price'] = float(price_stats['avg_price']) if price_stats['avg_price'] else 0
+
+        # Calculate price change (comparing current vs 30-day avg)
+        if context['avg_price'] > 0 and context['current_price'] > 0:
+            context['price_change'] = ((context['current_price'] - context['avg_price']) / context['avg_price']) * 100
+        else:
+            context['price_change'] = 0
+
+        # Get price history for chart (last 90 days)
+        ninety_days_ago = timezone.now() - timezone.timedelta(days=90)
+        price_history = Price.objects.filter(
+            material=material,
+            organization=organization,
+            time__gte=ninety_days_ago
+        ).order_by('time').values('time', 'price')
+
+        price_history_data = [
+            {'date': p['time'].strftime('%b %d'), 'price': float(p['price'])}
+            for p in price_history
+        ]
+        context['price_history'] = price_history_data
+        context['price_history_json'] = json.dumps(price_history_data)
+
+        # Get last price update time
+        if latest_price:
+            context['last_price_update'] = latest_price.time
+
+        # Get order statistics
+        order_stats = PurchaseOrderLine.objects.filter(
+            material=material,
+            purchase_order__organization=organization
+        ).aggregate(
+            total_orders=Count('purchase_order', distinct=True),
+            total_quantity=Sum('quantity'),
+            total_spend=Sum('total_price')
+        )
+        context['total_orders'] = order_stats['total_orders'] or 0
+        context['total_quantity'] = order_stats['total_quantity'] or 0
+        context['total_spend'] = float(order_stats['total_spend']) if order_stats['total_spend'] else 0
+
+        # Get supplier count for this material
+        supplier_count = Price.objects.filter(
+            material=material,
+            organization=organization
+        ).values('supplier').distinct().count()
+        context['supplier_count'] = supplier_count
+
+        # Get top suppliers by average price
+        top_suppliers = Price.objects.filter(
+            material=material,
+            organization=organization,
+            supplier__isnull=False
+        ).values('supplier__name').annotate(
+            avg_price=Avg('price')
+        ).order_by('avg_price')[:5]
+
+        context['top_suppliers'] = [
+            {'name': s['supplier__name'], 'avg_price': float(s['avg_price'])}
+            for s in top_suppliers if s['supplier__name']
+        ]
+
         return context
 
 
@@ -149,23 +218,73 @@ class MaterialCreateView(OrganizationRequiredMixin, CreateView):
         return context
 
 
+class MaterialPriceHistoryView(OrganizationRequiredMixin, DetailView):
+    """Material price history view"""
+    model = Material
+    template_name = 'pricing/price_history.html'
+    context_object_name = 'material'
+
+    def get_queryset(self):
+        return Material.objects.filter(
+            organization=self.get_user_organization()
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        organization = self.get_user_organization()
+        material = self.object
+
+        # Get all price history for this material
+        prices = Price.objects.filter(
+            material=material,
+            organization=organization
+        ).order_by('-time').select_related('supplier')
+
+        context['prices'] = prices
+
+        # Calculate statistics
+        if prices.exists():
+            price_values = [float(p.price) for p in prices]
+            context['current_price'] = price_values[0] if price_values else 0
+            context['avg_price'] = sum(price_values) / len(price_values)
+            context['min_price'] = min(price_values)
+            context['max_price'] = max(price_values)
+            context['price_count'] = len(price_values)
+
+            # Price history for chart (JSON)
+            price_history_data = [
+                {'date': p.time.strftime('%Y-%m-%d'), 'price': float(p.price), 'supplier': p.supplier.name if p.supplier else 'N/A'}
+                for p in prices[:90]  # Last 90 records
+            ]
+            context['price_history_json'] = json.dumps(list(reversed(price_history_data)))
+        else:
+            context['current_price'] = 0
+            context['avg_price'] = 0
+            context['min_price'] = 0
+            context['max_price'] = 0
+            context['price_count'] = 0
+            context['price_history_json'] = '[]'
+
+        return context
+
+
 class MaterialUpdateView(OrganizationRequiredMixin, UpdateView):
     """Update material"""
     model = Material
     template_name = 'pricing/material_form.html'
     fields = [
-        'code', 'name', 'description', 'material_type', 'category', 
+        'code', 'name', 'description', 'material_type', 'category',
         'unit_of_measure', 'weight', 'weight_unit', 'status',
-        'list_price', 'cost_price', 'currency', 
+        'list_price', 'cost_price', 'currency',
         'lead_time_days', 'minimum_order_quantity'
     ]
     success_url = reverse_lazy('pricing:material_list')
-    
+
     def get_queryset(self):
         return Material.objects.filter(
             organization=self.get_user_organization()
         )
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['categories'] = Category.objects.filter(
@@ -175,33 +294,54 @@ class MaterialUpdateView(OrganizationRequiredMixin, UpdateView):
 
 
 class PriceListView(OrganizationRequiredMixin, ListView):
-    """List prices"""
+    """List all price records across materials"""
     model = Price
-    template_name = 'pricing/price_history.html'
-    context_object_name = 'price_history'
+    template_name = 'pricing/prices_list.html'
+    context_object_name = 'prices'
     paginate_by = 50
-    
+
     def get_queryset(self):
-        from .models import PriceHistory
-        return PriceHistory.objects.filter(
+        queryset = Price.objects.filter(
             organization=self.get_user_organization()
-        ).select_related('material').order_by('-created_at')
-    
+        ).select_related('material', 'supplier').order_by('-time')
+
+        # Apply material filter if provided
+        material_id = self.request.GET.get('material')
+        if material_id:
+            queryset = queryset.filter(material_id=material_id)
+
+        return queryset
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        from django.db.models import Count
-        
-        # Add statistics
-        price_history = self.get_queryset()
-        context['price_increases'] = price_history.filter(change_type='increase').count()
-        context['price_decreases'] = price_history.filter(change_type='decrease').count()
-        context['total_updates'] = price_history.count()
-        
+        organization = self.get_user_organization()
+
+        # Get all prices for statistics
+        all_prices = Price.objects.filter(organization=organization)
+
+        # Calculate statistics
+        context['total_records'] = all_prices.count()
+
+        # Calculate price increases/decreases by comparing consecutive prices per material
+        # For simplicity, we'll show total count and unique materials
+        context['unique_materials'] = all_prices.values('material').distinct().count()
+        context['unique_suppliers'] = all_prices.filter(supplier__isnull=False).values('supplier').distinct().count()
+
+        # Price stats
+        price_stats = all_prices.aggregate(
+            avg_price=Avg('price'),
+            min_price=Min('price'),
+            max_price=Max('price')
+        )
+        context['avg_price'] = price_stats['avg_price'] or 0
+        context['min_price'] = price_stats['min_price'] or 0
+        context['max_price'] = price_stats['max_price'] or 0
+
         # Add materials for filter dropdown
         context['materials'] = Material.objects.filter(
-            organization=self.get_user_organization()
+            organization=organization
         ).order_by('name')
-        
+
         return context
 
 
@@ -412,23 +552,23 @@ class MaterialDeleteView(OrganizationRequiredMixin, DeleteView):
         )
 
 
-class MaterialPriceHistoryView(OrganizationRequiredMixin, View):
-    """Get material price history for charts"""
-    
+class MaterialPriceHistoryAPIView(OrganizationRequiredMixin, View):
+    """Get material price history for charts (API endpoint returning JSON)"""
+
     def get(self, request, pk):
         material = get_object_or_404(
             Material,
             pk=pk,
             organization=request.user.profile.organization
         )
-        
+
         # Get price history for last 90 days
         ninety_days_ago = timezone.now() - timedelta(days=90)
         prices = Price.objects.filter(
             material=material,
             time__gte=ninety_days_ago
         ).order_by('time').values('time', 'price', 'supplier__name')
-        
+
         # Calculate statistics
         price_stats = Price.objects.filter(
             material=material,
@@ -440,14 +580,14 @@ class MaterialPriceHistoryView(OrganizationRequiredMixin, View):
             max_30d=Max('price'),
             volatility=StdDev('price')
         )
-        
+
         # Calculate price change
         recent_prices = list(prices)
         if len(recent_prices) >= 2:
             change = ((recent_prices[-1]['price'] - recent_prices[-2]['price']) / recent_prices[-2]['price']) * 100
         else:
             change = 0
-        
+
         return JsonResponse({
             'material': {
                 'id': material.id,

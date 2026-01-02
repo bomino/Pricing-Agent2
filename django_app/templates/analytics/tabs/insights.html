@@ -4,8 +4,8 @@
     <div class="p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow">
         <div class="text-center">
             <i class="fas fa-piggy-bank text-4xl text-green-600 mb-3"></i>
-            <h4 class="font-semibold text-lg mb-2">Cost Savings</h4>
-            <p class="text-3xl font-bold text-green-600 mb-2">$42,500</p>
+            <h4 class="font-semibold text-lg mb-2">Savings Opportunities</h4>
+            <p class="text-3xl font-bold text-green-600 mb-2">{{ opportunities|length|default:"0" }}</p>
             <p class="text-sm text-gray-600">Identified this month</p>
             <div class="mt-4">
                 <button class="text-sm text-green-600 hover:text-green-700 font-medium"
@@ -90,8 +90,8 @@
         <div class="text-center">
             <i class="fas fa-lightbulb text-4xl text-yellow-500 mb-3"></i>
             <h4 class="font-semibold text-lg mb-2">Quick Insights</h4>
-            <p class="text-3xl font-bold text-yellow-600 mb-2">12</p>
-            <p class="text-sm text-gray-600">New recommendations</p>
+            <p class="text-3xl font-bold text-yellow-600 mb-2">{{ opportunities|length|default:"0" }}</p>
+            <p class="text-sm text-gray-600">Recommendations available</p>
             <div class="mt-4">
                 <button class="text-sm text-yellow-600 hover:text-yellow-700 font-medium"
                         hx-get="/analytics/insights/all/"

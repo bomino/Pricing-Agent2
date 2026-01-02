@@ -37,22 +37,36 @@ def upload_dashboard(request):
     # Get organization through user profile (safe access)
     organization = get_user_organization(request.user)
     
+    # Calculate stats
+    total_uploads = DataUpload.objects.filter(
+        organization=organization
+    ).count() if organization else 0
+    successful = DataUpload.objects.filter(
+        organization=organization,
+        status='completed'
+    ).count() if organization else 0
+    pending = DataUpload.objects.filter(
+        organization=organization,
+        status__in=['pending', 'processing', 'validating', 'mapping']
+    ).count() if organization else 0
+    failed = DataUpload.objects.filter(
+        organization=organization,
+        status='failed'
+    ).count() if organization else 0
+
+    # Calculate success rate
+    success_rate = round((successful / total_uploads * 100), 1) if total_uploads > 0 else 0
+
     context = {
         'recent_uploads': DataUpload.objects.filter(
             organization=organization
         ).order_by('-created_at')[:10] if organization else [],
         'upload_stats': {
-            'total_uploads': DataUpload.objects.filter(
-                organization=organization
-            ).count() if organization else 0,
-            'successful': DataUpload.objects.filter(
-                organization=organization,
-                status='completed'
-            ).count() if organization else 0,
-            'pending': DataUpload.objects.filter(
-                organization=organization,
-                status__in=['pending', 'processing', 'validating', 'mapping']
-            ).count() if organization else 0,
+            'total_uploads': total_uploads,
+            'successful': successful,
+            'pending': pending,
+            'failed': failed,
+            'success_rate': success_rate,
         }
     }
     return render(request, 'data_ingestion/dashboard.html', context)
