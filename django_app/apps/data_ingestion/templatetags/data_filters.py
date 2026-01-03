@@ -126,6 +126,18 @@ def multiply(value, arg):
         return 0
 
 
+@register.filter(name='abs')
+def absolute_value(value):
+    """
+    Return absolute value of a number
+    Usage: {{ value|abs }}
+    """
+    try:
+        return abs(float(value))
+    except (TypeError, ValueError):
+        return value
+
+
 @register.filter
 def intcomma(value):
     """

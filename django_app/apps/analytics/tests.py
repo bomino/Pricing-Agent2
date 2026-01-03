@@ -12,7 +12,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth.models import User
 
-from apps.core.models import Organization, OrganizationMembership
+from apps.core.models import Organization
+from apps.accounts.models import UserProfile
 from apps.analytics.models import Report
 
 
@@ -24,7 +25,8 @@ class ReportManagementTestCase(TestCase):
         # Create organization
         self.organization = Organization.objects.create(
             name='Test Organization',
-            slug='test-org'
+            code='TEST_ORG',
+            type='buyer'
         )
 
         # Create user
@@ -34,14 +36,13 @@ class ReportManagementTestCase(TestCase):
             password='testpass123'
         )
 
-        # Create organization membership
-        self.membership = OrganizationMembership.objects.create(
+        # Create user profile with organization
+        self.profile = UserProfile.objects.create(
             user=self.user,
-            organization=self.organization,
-            role='admin'
+            organization=self.organization
         )
 
-        # Create test report
+        # Create test report with summary data
         self.report = Report.objects.create(
             organization=self.organization,
             created_by=self.user,
@@ -53,6 +54,25 @@ class ReportManagementTestCase(TestCase):
             period_end=timezone.now().date(),
             status='completed',
             generated_at=timezone.now(),
+            summary_data={
+                'report_title': 'Test Spend Analysis Report',
+                'period': '2025-12-03 to 2026-01-02',
+                'total_spend': 50000.00,
+                'order_count': 25,
+                'by_category': [
+                    {'category': 'Office Supplies', 'spend': 15000, 'orders': 10},
+                    {'category': 'Equipment', 'spend': 35000, 'orders': 15}
+                ],
+                'top_suppliers': [
+                    {'supplier': 'Test Supplier', 'spend': 50000, 'orders': 25, 'avg_order': 2000}
+                ],
+                'trends': [
+                    {'material': 'Test Material', 'first_price': 100, 'last_price': 110, 'change_pct': 10}
+                ],
+                'materials_analyzed': 1,
+                'avg_price_change': 10,
+                'opportunities': [],
+            }
         )
 
         # Set up client
@@ -138,7 +158,8 @@ class ReportDownloadViewTests(ReportManagementTestCase):
         # Create another organization and report
         other_org = Organization.objects.create(
             name='Other Organization',
-            slug='other-org'
+            code='OTHER_ORG_DL',
+            type='buyer'
         )
         other_user = User.objects.create_user(
             username='otheruser',
@@ -186,12 +207,14 @@ class ReportPreviewViewTests(ReportManagementTestCase):
         self.assertContains(response, 'Test Report')
 
     def test_view_nonexistent_report(self):
-        """Test viewing a nonexistent report."""
+        """Test viewing a nonexistent report returns 200 with error in context."""
         fake_uuid = uuid.uuid4()
         url = reverse('analytics:report_preview', kwargs={'pk': fake_uuid})
         response = self.client.get(url)
 
-        self.assertEqual(response.status_code, 404)
+        # View returns 200 with error message for HTMX modal display
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('error', response.context)
 
 
 class ReportShareViewTests(ReportManagementTestCase):
@@ -206,24 +229,42 @@ class ReportShareViewTests(ReportManagementTestCase):
         # Check template renders share modal content
         self.assertContains(response, 'Share', html=False)
 
-    def test_share_report_via_email(self):
-        """Test sharing report via email."""
+    def test_share_report_with_users(self):
+        """Test sharing report with users."""
+        # Create another user to share with
+        other_user = User.objects.create_user(
+            username='shareuser',
+            email='share@example.com',
+            password='sharepass123'
+        )
+        UserProfile.objects.create(
+            user=other_user,
+            organization=self.organization
+        )
+
         url = reverse('analytics:report_share', kwargs={'pk': self.report.id})
         response = self.client.post(url, {
-            'share_method': 'email',
-            'email_addresses': 'recipient@example.com',
-            'include_file': True,
+            'users': [other_user.id],
         })
 
         self.assertEqual(response.status_code, 200)
 
+    def test_share_report_no_users_selected(self):
+        """Test sharing report without selecting users returns 400."""
+        url = reverse('analytics:report_share', kwargs={'pk': self.report.id})
+        response = self.client.post(url, {})
+
+        self.assertEqual(response.status_code, 400)
+
     def test_share_nonexistent_report(self):
-        """Test sharing a nonexistent report."""
+        """Test sharing a nonexistent report returns 200 with error in context."""
         fake_uuid = uuid.uuid4()
         url = reverse('analytics:report_share', kwargs={'pk': fake_uuid})
         response = self.client.get(url)
 
-        self.assertEqual(response.status_code, 404)
+        # View returns 200 with error message for HTMX modal display
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('error', response.context)
 
 
 class ReportScheduleViewTests(ReportManagementTestCase):
@@ -322,13 +363,12 @@ class ReportBuilderViewTests(ReportManagementTestCase):
     def test_build_custom_report(self):
         """Test building a custom report."""
         url = reverse('analytics:report_builder')
-        initial_count = Report.objects.filter(report_type='custom').count()
 
+        # Use valid supplier fields and pass as a list (not JSON)
         response = self.client.post(url, {
             'name': 'Custom Analysis',
-            'report_type': 'custom',
             'data_source': 'suppliers',
-            'fields': json.dumps(['name', 'status', 'email']),
+            'fields': ['name', 'code', 'status'],
             'format': 'csv',
         })
 
@@ -466,17 +506,17 @@ class OrganizationIsolationTests(ReportManagementTestCase):
         # Create another organization with its own reports
         self.other_org = Organization.objects.create(
             name='Other Organization',
-            slug='other-org'
+            code='OTHER_ORG',
+            type='buyer'
         )
         self.other_user = User.objects.create_user(
             username='otheruser',
             email='other@example.com',
             password='otherpass123'
         )
-        OrganizationMembership.objects.create(
+        UserProfile.objects.create(
             user=self.other_user,
-            organization=self.other_org,
-            role='admin'
+            organization=self.other_org
         )
         self.other_report = Report.objects.create(
             organization=self.other_org,

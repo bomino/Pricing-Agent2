@@ -28,4 +28,15 @@ ALLOWED_HOSTS = ['*']
 # Disable CSRF for local testing (optional)
 # CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
 
+# Use local memory cache instead of Redis for local testing
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
+# Disable Celery for local testing
+CELERY_TASK_ALWAYS_EAGER = True
+
 print("Using LOCAL settings with SQLite database")

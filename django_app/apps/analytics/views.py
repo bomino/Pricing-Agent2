@@ -2023,7 +2023,7 @@ class TrendsTabView(OrganizationRequiredMixin, TemplateView):
         # Check material coverage
         materials_with_prices = Material.objects.filter(
             organization=organization,
-            price__isnull=False
+            prices__isnull=False
         ).distinct().count()
         if materials_with_prices > 0:
             trends.append(f"{materials_with_prices} materials with tracked pricing")
@@ -2999,6 +2999,7 @@ class ReportScheduleNewView(OrganizationRequiredMixin, TemplateView):
             next_run = now + timedelta(days=7)
 
         # Create the scheduled report
+        today = now.date()
         report = Report.objects.create(
             name=report_name,
             report_type=report_type,
@@ -3007,7 +3008,9 @@ class ReportScheduleNewView(OrganizationRequiredMixin, TemplateView):
             is_scheduled=True,
             schedule_frequency=frequency,
             next_run=next_run,
-            status='pending'
+            status='pending',
+            period_start=today - timedelta(days=30),
+            period_end=today
         )
 
         return HttpResponse(
@@ -3036,25 +3039,25 @@ class ReportBuilderView(OrganizationRequiredMixin, TemplateView):
                 'id': 'materials',
                 'name': 'Materials',
                 'count': Material.objects.filter(organization=organization).count(),
-                'fields': ['name', 'category', 'unit', 'description']
+                'fields': ['name', 'code', 'unit_of_measure', 'description', 'status']
             },
             {
                 'id': 'prices',
                 'name': 'Prices',
                 'count': Price.objects.filter(material__organization=organization).count(),
-                'fields': ['material', 'supplier', 'price', 'effective_date']
+                'fields': ['material__name', 'supplier__name', 'unit_price', 'effective_date']
             },
             {
                 'id': 'suppliers',
                 'name': 'Suppliers',
                 'count': Supplier.objects.filter(organization=organization).count(),
-                'fields': ['name', 'code', 'status', 'rating']
+                'fields': ['name', 'code', 'status']
             },
             {
                 'id': 'orders',
                 'name': 'Purchase Orders',
                 'count': PurchaseOrder.objects.filter(organization=organization).count(),
-                'fields': ['po_number', 'supplier', 'total_amount', 'status', 'order_date']
+                'fields': ['po_number', 'supplier__name', 'total_amount', 'status']
             },
         ]
 
@@ -3084,16 +3087,19 @@ class ReportBuilderView(OrganizationRequiredMixin, TemplateView):
             )
 
         # Create report record
+        today = timezone.now().date()
         report = Report.objects.create(
             name=report_name,
             report_type='custom',
             organization=organization,
             created_by=request.user,
             status='processing',
-            config={
+            period_start=today - timedelta(days=30),
+            period_end=today,
+            report_format=output_format,
+            parameters={
                 'data_source': data_source,
                 'fields': selected_fields,
-                'format': output_format
             }
         )
 
