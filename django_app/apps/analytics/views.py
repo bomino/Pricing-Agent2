@@ -1300,26 +1300,98 @@ class BenchmarksTabView(OrganizationRequiredMixin, TemplateView):
 
 class ReportsTabView(OrganizationRequiredMixin, TemplateView):
     """Reports management tab with download capabilities
-    
+
     Features:
     - List of recent generated reports
     - Download links for each report type
     - Report metadata (created date, type, status)
-    
+    - Dynamic report templates with last-generated timestamps
+    - Scheduled reports from database
+
     Uses card-based layout matching other tabs' styling.
     """
     template_name = 'analytics/tabs/reports.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         organization = self.get_user_organization()
-        
+
         # Get recent reports
         recent_reports = Report.objects.filter(
             organization=organization
         ).order_by('-created_at')[:10]
-        
+
+        # Get report templates with last generated dates
+        report_templates = self._get_report_templates(organization)
+
+        # Get scheduled reports
+        scheduled_reports = Report.objects.filter(
+            organization=organization,
+            is_scheduled=True
+        ).order_by('next_run')
+
         context.update({
             'recent_reports': recent_reports,
+            'report_templates': report_templates,
+            'scheduled_reports': scheduled_reports,
         })
         return context
+
+    def _get_report_templates(self, organization):
+        """Get report templates with last generated dates from database"""
+        report_types = [
+            {
+                'type': 'spend_analysis',
+                'name': 'Spend Analysis Report',
+                'description': 'Comprehensive spending breakdown by category, supplier, and time period',
+                'icon': 'fa-chart-bar',
+                'color': 'blue',
+            },
+            {
+                'type': 'supplier_performance',
+                'name': 'Supplier Performance',
+                'description': 'Detailed supplier metrics, compliance, and quality scores',
+                'icon': 'fa-users',
+                'color': 'green',
+            },
+            {
+                'type': 'savings_opportunities',
+                'name': 'Savings Opportunities',
+                'description': 'Identified cost reduction opportunities with action plans',
+                'icon': 'fa-piggy-bank',
+                'color': 'yellow',
+            },
+            {
+                'type': 'price_trends',
+                'name': 'Price Trend Analysis',
+                'description': 'Historical price movements and future predictions',
+                'icon': 'fa-chart-line',
+                'color': 'purple',
+            },
+            {
+                'type': 'contract_compliance',
+                'name': 'Contract Compliance',
+                'description': 'Contract adherence and maverick spend analysis',
+                'icon': 'fa-file-contract',
+                'color': 'red',
+            },
+            {
+                'type': 'executive_summary',
+                'name': 'Executive Summary',
+                'description': 'High-level overview for leadership presentation',
+                'icon': 'fa-briefcase',
+                'color': 'indigo',
+            },
+        ]
+
+        # Query last generated date for each report type
+        for template in report_types:
+            last_report = Report.objects.filter(
+                organization=organization,
+                report_type=template['type'],
+                status='completed'
+            ).order_by('-created_at').first()
+
+            template['last_generated'] = last_report.created_at if last_report else None
+
+        return report_types

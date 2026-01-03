@@ -1,89 +1,28 @@
 <!-- Reports Tab Content -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    <!-- Report Templates -->
+    <!-- Report Templates - Dynamic from database -->
+    {% for template in report_templates %}
     <div class="report-card p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
          hx-post="/analytics/reports/generate/"
-         hx-vals='{"report_type": "spend_analysis"}'
+         hx-vals='{"report_type": "{{ template.type }}"}'
          hx-target="#report-generation-status">
         <div class="text-center">
-            <i class="fas fa-chart-bar text-4xl text-blue-600 mb-3"></i>
-            <h4 class="font-semibold text-lg mb-2">Spend Analysis Report</h4>
-            <p class="text-sm text-gray-600">Comprehensive spending breakdown by category, supplier, and time period</p>
+            <i class="fas {{ template.icon }} text-4xl text-{{ template.color }}-600 mb-3"></i>
+            <h4 class="font-semibold text-lg mb-2">{{ template.name }}</h4>
+            <p class="text-sm text-gray-600">{{ template.description }}</p>
             <div class="mt-4">
-                <span class="text-xs text-gray-500">Last generated: 2 days ago</span>
+                <span class="text-xs text-gray-500">
+                    Last generated:
+                    {% if template.last_generated %}
+                        {{ template.last_generated|timesince }} ago
+                    {% else %}
+                        Never generated
+                    {% endif %}
+                </span>
             </div>
         </div>
     </div>
-
-    <div class="report-card p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
-         hx-post="/analytics/reports/generate/"
-         hx-vals='{"report_type": "supplier_performance"}'
-         hx-target="#report-generation-status">
-        <div class="text-center">
-            <i class="fas fa-users text-4xl text-green-600 mb-3"></i>
-            <h4 class="font-semibold text-lg mb-2">Supplier Performance</h4>
-            <p class="text-sm text-gray-600">Detailed supplier metrics, compliance, and quality scores</p>
-            <div class="mt-4">
-                <span class="text-xs text-gray-500">Last generated: 1 week ago</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="report-card p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
-         hx-post="/analytics/reports/generate/"
-         hx-vals='{"report_type": "savings_opportunities"}'
-         hx-target="#report-generation-status">
-        <div class="text-center">
-            <i class="fas fa-piggy-bank text-4xl text-yellow-600 mb-3"></i>
-            <h4 class="font-semibold text-lg mb-2">Savings Opportunities</h4>
-            <p class="text-sm text-gray-600">Identified cost reduction opportunities with action plans</p>
-            <div class="mt-4">
-                <span class="text-xs text-gray-500">Last generated: 3 days ago</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="report-card p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
-         hx-post="/analytics/reports/generate/"
-         hx-vals='{"report_type": "price_trends"}'
-         hx-target="#report-generation-status">
-        <div class="text-center">
-            <i class="fas fa-chart-line text-4xl text-purple-600 mb-3"></i>
-            <h4 class="font-semibold text-lg mb-2">Price Trend Analysis</h4>
-            <p class="text-sm text-gray-600">Historical price movements and future predictions</p>
-            <div class="mt-4">
-                <span class="text-xs text-gray-500">Last generated: Yesterday</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="report-card p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
-         hx-post="/analytics/reports/generate/"
-         hx-vals='{"report_type": "contract_compliance"}'
-         hx-target="#report-generation-status">
-        <div class="text-center">
-            <i class="fas fa-file-contract text-4xl text-red-600 mb-3"></i>
-            <h4 class="font-semibold text-lg mb-2">Contract Compliance</h4>
-            <p class="text-sm text-gray-600">Contract adherence and maverick spend analysis</p>
-            <div class="mt-4">
-                <span class="text-xs text-gray-500">Never generated</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="report-card p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
-         hx-post="/analytics/reports/generate/"
-         hx-vals='{"report_type": "executive_summary"}'
-         hx-target="#report-generation-status">
-        <div class="text-center">
-            <i class="fas fa-briefcase text-4xl text-navy-600 mb-3"></i>
-            <h4 class="font-semibold text-lg mb-2">Executive Summary</h4>
-            <p class="text-sm text-gray-600">High-level overview for leadership presentation</p>
-            <div class="mt-4">
-                <span class="text-xs text-gray-500">Last generated: 2 weeks ago</span>
-            </div>
-        </div>
-    </div>
+    {% endfor %}
 </div>
 
 <!-- Report Generation Status -->
@@ -114,7 +53,7 @@
             </button>
         </div>
     </div>
-    
+
     <div id="recent-reports-list" class="space-y-2">
         {% for report in recent_reports %}
         <div class="flex justify-between items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
@@ -154,7 +93,7 @@
                     <i class="fas fa-download"></i> Download
                 </button>
                 <div class="relative">
-                    <button class="btn btn-sm btn-outline" 
+                    <button class="btn btn-sm btn-outline"
                             onclick="toggleDropdown('report-actions-{{ report.id }}')">
                         <i class="fas fa-ellipsis-v"></i>
                     </button>
@@ -187,7 +126,7 @@
         </div>
         {% endfor %}
     </div>
-    
+
     {% if recent_reports %}
     <div class="mt-4 flex justify-center">
         <button class="btn btn-sm btn-outline"
@@ -207,29 +146,35 @@
         Scheduled Reports
     </h3>
     <div class="space-y-2">
+        {% for report in scheduled_reports %}
         <div class="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
             <div>
-                <p class="font-medium">Weekly Spend Analysis</p>
-                <p class="text-sm text-gray-600">Every Monday at 9:00 AM</p>
+                <p class="font-medium">{{ report.name }}</p>
+                <p class="text-sm text-gray-600">
+                    {{ report.schedule_frequency|default:"Custom schedule" }}
+                    {% if report.next_run %}
+                        - Next: {{ report.next_run|date:"M d, Y" }}
+                    {% endif %}
+                </p>
             </div>
             <div class="flex gap-2">
-                <button class="text-sm text-blue-600 hover:text-blue-700">Edit</button>
-                <button class="text-sm text-red-600 hover:text-red-700">Remove</button>
+                <button class="text-sm text-blue-600 hover:text-blue-700"
+                        hx-get="/analytics/reports/{{ report.id }}/schedule/edit/"
+                        hx-target="#modal-container">Edit</button>
+                <button class="text-sm text-red-600 hover:text-red-700"
+                        hx-delete="/analytics/reports/{{ report.id }}/schedule/"
+                        hx-confirm="Remove this scheduled report?">Remove</button>
             </div>
         </div>
-        
-        <div class="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-            <div>
-                <p class="font-medium">Monthly Supplier Performance</p>
-                <p class="text-sm text-gray-600">First day of month at 8:00 AM</p>
-            </div>
-            <div class="flex gap-2">
-                <button class="text-sm text-blue-600 hover:text-blue-700">Edit</button>
-                <button class="text-sm text-red-600 hover:text-red-700">Remove</button>
-            </div>
+        {% empty %}
+        <div class="text-center py-4 text-gray-500">
+            <i class="fas fa-calendar-times text-2xl mb-2"></i>
+            <p class="text-sm">No scheduled reports</p>
+            <p class="text-xs mt-1">Click "Add Schedule" below to create one</p>
         </div>
+        {% endfor %}
     </div>
-    
+
     <button class="w-full mt-4 btn btn-outline btn-sm"
             hx-get="/analytics/reports/schedule/new/"
             hx-target="#modal-container">
@@ -250,7 +195,7 @@
 function toggleDropdown(id) {
     const dropdown = document.getElementById(id);
     dropdown.classList.toggle('hidden');
-    
+
     // Close dropdown when clicking outside
     document.addEventListener('click', function closeDropdown(e) {
         if (!dropdown.contains(e.target) && !e.target.closest('button')) {
