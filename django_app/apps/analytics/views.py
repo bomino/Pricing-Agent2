@@ -283,19 +283,30 @@ class AnalyticsDashboardView(OrganizationRequiredMixin, TemplateView):
     def _get_calculated_metrics(self, organization):
         """Calculate performance metrics from database"""
         from apps.procurement.models import PurchaseOrder, RFQ
+        from django.db.models import Sum
 
         total_pos = PurchaseOrder.objects.filter(organization=organization).count()
 
-        # Contract compliance: % of POs linked to RFQs (formal procurement process)
-        pos_with_rfq = PurchaseOrder.objects.filter(
+        # Contract compliance: % of POs with approved/completed status (formal process)
+        compliant_pos = PurchaseOrder.objects.filter(
             organization=organization,
-            rfq__isnull=False
+            status__in=['approved', 'completed']
         ).count()
-        contract_compliance = round((pos_with_rfq / total_pos * 100) if total_pos > 0 else 0)
+        contract_compliance = round((compliant_pos / total_pos * 100) if total_pos > 0 else 0)
 
-        # Maverick spend: % of POs without RFQ (bypassing procurement process)
-        maverick_pos = total_pos - pos_with_rfq
-        maverick_spend = round((maverick_pos / total_pos * 100) if total_pos > 0 else 0)
+        # Maverick spend: % of spend on POs without approved supplier
+        # (POs from suppliers with low order counts - potential unauthorized purchases)
+        total_spend = PurchaseOrder.objects.filter(
+            organization=organization
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+        # Consider POs in draft/rejected status as maverick (not following proper process)
+        maverick_spend_amount = PurchaseOrder.objects.filter(
+            organization=organization,
+            status__in=['draft', 'rejected']
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+        maverick_spend = round((float(maverick_spend_amount) / float(total_spend) * 100) if total_spend > 0 else 0)
 
         return {
             'supplier_consolidation': self._calculate_supplier_consolidation(organization),
