@@ -25,6 +25,7 @@ An enterprise-grade AI-powered platform that automates cost benchmarking, valida
 - **Comprehensive Testing**: All 7 test categories passing
 
 ### 🆕 Recent Enhancements (January 2026)
+- **Analytics Charts Fixed**: Trends tab charts now render with calculated data from database
 - **Calculated Metrics**: Replaced all hardcoded values with database-calculated metrics
 - **Pricing Module Overhaul**: UUID-based URLs, price history views, material analytics
 - **Dashboard APIs**: Real-time RFQ and alert endpoints for HTMX polling

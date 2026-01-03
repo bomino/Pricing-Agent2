@@ -386,25 +386,45 @@
 <script>
 // Define all functions globally to ensure they're accessible
 window.switchTab = function(button, tabName) {
+    console.log('switchTab called with tabName:', tabName);
+
     // Update all tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active', 'text-navy-700');
         btn.classList.add('text-gray-600');
     });
-    
+
     // Set active tab
     button.classList.remove('text-gray-600');
     button.classList.add('active', 'text-navy-700');
-    
+
     // Hide all tab panes
     document.querySelectorAll('.tab-pane').forEach(pane => {
         pane.style.display = 'none';
     });
-    
+
     // Show the selected tab pane if it exists
     const targetPane = document.getElementById(tabName + '-tab');
+    console.log('Target pane found:', !!targetPane, 'id:', tabName + '-tab');
+
     if (targetPane) {
         targetPane.style.display = 'block';
+        // Initialize charts for tabs that need them
+        // Use a longer timeout to ensure Chart.js is loaded
+        setTimeout(() => {
+            console.log('Attempting to call initializeTabContent, exists:', typeof window.initializeTabContent);
+            if (typeof window.initializeTabContent === 'function') {
+                window.initializeTabContent(tabName);
+            } else {
+                console.warn('initializeTabContent not found, will retry...');
+                // Retry after another delay in case scripts are still loading
+                setTimeout(() => {
+                    if (typeof window.initializeTabContent === 'function') {
+                        window.initializeTabContent(tabName);
+                    }
+                }, 500);
+            }
+        }, 150);
     } else {
         // If pane doesn't exist, load it via HTMX
         if (typeof htmx !== 'undefined') {
@@ -923,39 +943,14 @@ window.closeReportModal = function() {
 </div>
 {% endblock %}
 
-{% block extra_js %}
+{% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Listen for HTMX events to initialize charts and maintain styles
-document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.detail.target.id === 'tab-content') {
-        // Apply card styles to newly loaded content
-        setTimeout(() => {
-            // Find all card-like elements and ensure they have proper styling
-            document.querySelectorAll('#tab-content .p-4.bg-white.border').forEach(el => {
-                el.classList.add('card-style');
-            });
-            
-            // Also apply to any element with these individual classes
-            document.querySelectorAll('#tab-content [class*="border-gray-200"]').forEach(el => {
-                if (el.classList.contains('p-4') && el.classList.contains('bg-white')) {
-                    el.classList.add('card-style');
-                }
-            });
-        }, 100);
-        
-        // Initialize charts if needed
-        const activeBtn = document.querySelector('.tab-btn.active');
-        if (activeBtn) {
-            const activeTab = activeBtn.dataset.tab;
-            if (typeof initializeTabContent === 'function') {
-                initializeTabContent(activeTab);
-            }
-        }
-    }
-});
+console.log('Analytics extra_js script loading...');
 
-function initializeTabContent(tab) {
+// Define initializeTabContent globally so switchTab can find it
+window.initializeTabContent = function(tab) {
+    console.log('initializeTabContent called with tab:', tab);
     switch(tab) {
         case 'trends':
             initializeTrendCharts();
@@ -967,26 +962,83 @@ function initializeTabContent(tab) {
             initializeBenchmarkCharts();
             break;
         default:
+            console.log('No initialization needed for tab:', tab);
             break;
     }
-}
+};
+
+// Listen for HTMX events to initialize charts and maintain styles
+document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.detail.target.id === 'tab-content') {
+        // Apply card styles to newly loaded content
+        setTimeout(() => {
+            // Find all card-like elements and ensure they have proper styling
+            document.querySelectorAll('#tab-content .p-4.bg-white.border').forEach(el => {
+                el.classList.add('card-style');
+            });
+
+            // Also apply to any element with these individual classes
+            document.querySelectorAll('#tab-content [class*="border-gray-200"]').forEach(el => {
+                if (el.classList.contains('p-4') && el.classList.contains('bg-white')) {
+                    el.classList.add('card-style');
+                }
+            });
+        }, 100);
+
+        // Initialize charts if needed
+        const activeBtn = document.querySelector('.tab-btn.active');
+        if (activeBtn) {
+            const activeTab = activeBtn.dataset.tab;
+            if (typeof window.initializeTabContent === 'function') {
+                window.initializeTabContent(activeTab);
+            }
+        }
+    }
+});
+
+// Trend data from Django context
+const trendData = {
+    monthlyLabels: {{ trend_data.monthly_labels|safe|default:"['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']" }},
+    monthlySpend: {{ trend_data.monthly_spend|safe|default:"[0, 0, 0, 0, 0, 0]" }},
+    categoryLabels: {{ trend_data.category_labels|safe|default:"['No Data']" }},
+    categoryData: {{ trend_data.category_data|safe|default:"[0]" }},
+    supplierDistribution: {{ trend_data.supplier_distribution|safe|default:"[0, 0, 0]" }}
+};
 
 function initializeTrendCharts() {
+    console.log('initializeTrendCharts called');
+    console.log('trendData:', trendData);
+    console.log('Chart available:', typeof Chart !== 'undefined');
+
     const trendCanvas = document.getElementById('trendChart');
-    if (trendCanvas && !trendCanvas.chartInstance) {
-        trendCanvas.chartInstance = new Chart(trendCanvas, {
+    console.log('trendCanvas found:', !!trendCanvas);
+
+    if (trendCanvas) {
+        try {
+            // Destroy existing chart if any
+            if (trendCanvas.chartInstance) {
+                trendCanvas.chartInstance.destroy();
+            }
+
+            // Calculate budget as 5% above average spend
+            const avgSpend = trendData.monthlySpend.reduce((a, b) => a + b, 0) / trendData.monthlySpend.length;
+            const budgetData = trendData.monthlyLabels.map(() => Math.round(avgSpend * 1.05));
+            console.log('Creating trend chart with avgSpend:', avgSpend);
+
+            trendCanvas.chartInstance = new Chart(trendCanvas, {
             type: 'line',
             data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                labels: trendData.monthlyLabels,
                 datasets: [{
                     label: 'Actual Spend',
-                    data: [45000, 52000, 48000, 61000, 58000, 62000],
+                    data: trendData.monthlySpend,
                     borderColor: '#003366',
                     backgroundColor: 'rgba(0, 51, 102, 0.1)',
+                    fill: true,
                     tension: 0.3
                 }, {
                     label: 'Budget',
-                    data: [50000, 50000, 50000, 55000, 55000, 60000],
+                    data: budgetData,
                     borderColor: '#dc2626',
                     borderDash: [5, 5],
                     fill: false
@@ -996,47 +1048,114 @@ function initializeTrendCharts() {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'bottom' }
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': $' + context.raw.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+            console.log('Trend chart created successfully');
+        } catch (error) {
+            console.error('Error creating trend chart:', error);
+        }
+    }
+
+    // Initialize category trend chart
+    const categoryCanvas = document.getElementById('categoryTrendChart');
+    if (categoryCanvas) {
+        if (categoryCanvas.chartInstance) {
+            categoryCanvas.chartInstance.destroy();
+        }
+
+        const hasData = trendData.categoryLabels.length > 0 && trendData.categoryData.some(v => v > 0);
+
+        categoryCanvas.chartInstance = new Chart(categoryCanvas, {
+            type: 'bar',
+            data: {
+                labels: hasData ? trendData.categoryLabels : ['No Data'],
+                datasets: [{
+                    label: 'Spend by Category',
+                    data: hasData ? trendData.categoryData : [0],
+                    backgroundColor: ['#003366', '#0066cc', '#3399ff', '#66b3ff', '#99ccff']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return '$' + context.raw.toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            }
+                        }
+                    }
                 }
             }
         });
     }
-    
-    // Initialize category trend chart
-    const categoryCanvas = document.getElementById('categoryTrendChart');
-    if (categoryCanvas && !categoryCanvas.chartInstance) {
-        categoryCanvas.chartInstance = new Chart(categoryCanvas, {
-            type: 'bar',
-            data: {
-                labels: ['Raw Materials', 'Components', 'Equipment', 'Services'],
-                datasets: [{
-                    label: 'Spend by Category',
-                    data: [25000, 32000, 18000, 15000],
-                    backgroundColor: ['#003366', '#0066cc', '#3399ff', '#66b3ff']
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false
-            }
-        });
-    }
-    
+
     // Initialize supplier trend chart
     const supplierCanvas = document.getElementById('supplierTrendChart');
-    if (supplierCanvas && !supplierCanvas.chartInstance) {
+    if (supplierCanvas) {
+        if (supplierCanvas.chartInstance) {
+            supplierCanvas.chartInstance.destroy();
+        }
+
+        const totalSpend = trendData.supplierDistribution.reduce((a, b) => a + b, 0);
+        const hasSupplierData = totalSpend > 0;
+
         supplierCanvas.chartInstance = new Chart(supplierCanvas, {
             type: 'doughnut',
             data: {
-                labels: ['Top 5 Suppliers', 'Next 10 Suppliers', 'Others'],
+                labels: hasSupplierData ? ['Top 5 Suppliers', 'Next 10 Suppliers', 'Others'] : ['No Data'],
                 datasets: [{
-                    data: [45, 35, 20],
-                    backgroundColor: ['#003366', '#0066cc', '#99ccff']
+                    data: hasSupplierData ? trendData.supplierDistribution : [1],
+                    backgroundColor: hasSupplierData ? ['#003366', '#0066cc', '#99ccff'] : ['#e5e7eb']
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                if (!hasSupplierData) return 'No data available';
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((context.raw / total) * 100);
+                                return context.label + ': $' + context.raw.toLocaleString() + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                }
             }
         });
     }
