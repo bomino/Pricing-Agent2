@@ -6,6 +6,7 @@
         <div class="report-card p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
              hx-post="/analytics/reports/generate/"
              hx-vals='{"report_type": "{{ template.type }}"}'
+             hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
              hx-target="#reports-generation-status"
              hx-swap="innerHTML">
             <div class="text-center">

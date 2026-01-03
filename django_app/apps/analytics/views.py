@@ -462,34 +462,54 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
         from apps.pricing.models import Material, Price
         from django.db.models import Avg, Sum, Count, Max, Min
         from datetime import date
+        import logging
 
-        report_type = request.POST.get('report_type')
-        date_from = request.POST.get('date_from')
-        date_to = request.POST.get('date_to')
-        organization = get_user_organization(request.user)
+        logger = logging.getLogger(__name__)
 
-        # Set default date range (last 30 days) if not provided
-        if not date_to:
-            period_end = date.today()
-        else:
-            period_end = date.fromisoformat(date_to)
+        try:
+            report_type = request.POST.get('report_type')
+            date_from = request.POST.get('date_from')
+            date_to = request.POST.get('date_to')
+            organization = get_user_organization(request.user)
 
-        if not date_from:
-            period_start = period_end - timedelta(days=30)
-        else:
-            period_start = date.fromisoformat(date_from)
+            logger.info(f"Generating report: type={report_type}, org={organization}")
 
-        # Create report record
-        report = Report.objects.create(
-            name=f"{report_type.replace('_', ' ').title()} Report",
-            report_type=report_type,
-            organization=organization,
-            created_by=request.user,
-            period_start=period_start,
-            period_end=period_end,
-            parameters={'date_from': str(period_start), 'date_to': str(period_end)},
-            status='generating'
-        )
+            if not report_type:
+                return HttpResponse(
+                    '<div class="bg-red-50 border border-red-200 rounded-lg p-4">'
+                    '<p class="text-red-800">Error: No report type specified</p></div>',
+                    status=400
+                )
+
+            # Set default date range (last 30 days) if not provided
+            if not date_to:
+                period_end = date.today()
+            else:
+                period_end = date.fromisoformat(date_to)
+
+            if not date_from:
+                period_start = period_end - timedelta(days=30)
+            else:
+                period_start = date.fromisoformat(date_from)
+
+            # Create report record
+            report = Report.objects.create(
+                name=f"{report_type.replace('_', ' ').title()} Report",
+                report_type=report_type,
+                organization=organization,
+                created_by=request.user,
+                period_start=period_start,
+                period_end=period_end,
+                parameters={'date_from': str(period_start), 'date_to': str(period_end)},
+                status='generating'
+            )
+        except Exception as e:
+            logger.exception(f"Error initializing report generation: {e}")
+            return HttpResponse(
+                f'<div class="bg-red-50 border border-red-200 rounded-lg p-4">'
+                f'<p class="text-red-800">Error initializing report: {str(e)}</p></div>',
+                status=500
+            )
 
         try:
             # Generate report data based on type
@@ -528,11 +548,19 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
             return HttpResponse(html)
 
         except Exception as e:
-            report.status = 'failed'
-            report.summary_data = {'error': str(e)}
-            report.save()
+            import traceback as tb
+            error_msg = str(e)
+            error_trace = tb.format_exc()
+            logger.error(f"Error generating report {report_type}: {error_msg}\n{error_trace}")
 
-            # Return error HTML for HTMX
+            try:
+                report.status = 'failed'
+                report.summary_data = {'error': error_msg}
+                report.save()
+            except Exception as save_error:
+                logger.error(f"Failed to save error status: {save_error}")
+
+            # Return error HTML for HTMX (with 200 status so HTMX displays it)
             html = f'''
             <div class="bg-red-50 border border-red-200 rounded-lg p-4">
                 <div class="flex items-center">
@@ -544,7 +572,7 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
                 </div>
             </div>
             '''
-            return HttpResponse(html, status=500)
+            return HttpResponse(html)
 
     def _convert_decimals(self, obj):
         """Recursively convert Decimal values to float for JSON serialization"""
@@ -680,7 +708,7 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
     def _generate_savings_opportunities(self, organization, period_start, period_end):
         """Generate savings opportunities report data"""
         from apps.pricing.models import Price, Material
-        from django.db.models import Avg, StdDev
+        from django.db.models import Avg, Min, Max
 
         opportunities = []
 
