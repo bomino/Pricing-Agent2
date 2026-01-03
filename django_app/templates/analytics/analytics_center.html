@@ -386,8 +386,6 @@
 <script>
 // Define all functions globally to ensure they're accessible
 window.switchTab = function(button, tabName) {
-    console.log('switchTab called with tabName:', tabName);
-
     // Update all tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active', 'text-navy-700');
@@ -405,18 +403,13 @@ window.switchTab = function(button, tabName) {
 
     // Show the selected tab pane if it exists
     const targetPane = document.getElementById(tabName + '-tab');
-    console.log('Target pane found:', !!targetPane, 'id:', tabName + '-tab');
-
     if (targetPane) {
         targetPane.style.display = 'block';
         // Initialize charts for tabs that need them
-        // Use a longer timeout to ensure Chart.js is loaded
         setTimeout(() => {
-            console.log('Attempting to call initializeTabContent, exists:', typeof window.initializeTabContent);
             if (typeof window.initializeTabContent === 'function') {
                 window.initializeTabContent(tabName);
             } else {
-                console.warn('initializeTabContent not found, will retry...');
                 // Retry after another delay in case scripts are still loading
                 setTimeout(() => {
                     if (typeof window.initializeTabContent === 'function') {
@@ -946,11 +939,8 @@ window.closeReportModal = function() {
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-console.log('Analytics extra_js script loading...');
-
 // Define initializeTabContent globally so switchTab can find it
 window.initializeTabContent = function(tab) {
-    console.log('initializeTabContent called with tab:', tab);
     switch(tab) {
         case 'trends':
             initializeTrendCharts();
@@ -960,9 +950,6 @@ window.initializeTabContent = function(tab) {
             break;
         case 'benchmarks':
             initializeBenchmarkCharts();
-            break;
-        default:
-            console.log('No initialization needed for tab:', tab);
             break;
     }
 };
@@ -1006,13 +993,7 @@ const trendData = {
 };
 
 function initializeTrendCharts() {
-    console.log('initializeTrendCharts called');
-    console.log('trendData:', trendData);
-    console.log('Chart available:', typeof Chart !== 'undefined');
-
     const trendCanvas = document.getElementById('trendChart');
-    console.log('trendCanvas found:', !!trendCanvas);
-
     if (trendCanvas) {
         try {
             // Destroy existing chart if any
@@ -1023,7 +1004,6 @@ function initializeTrendCharts() {
             // Calculate budget as 5% above average spend
             const avgSpend = trendData.monthlySpend.reduce((a, b) => a + b, 0) / trendData.monthlySpend.length;
             const budgetData = trendData.monthlyLabels.map(() => Math.round(avgSpend * 1.05));
-            console.log('Creating trend chart with avgSpend:', avgSpend);
 
             trendCanvas.chartInstance = new Chart(trendCanvas, {
             type: 'line',
@@ -1069,9 +1049,8 @@ function initializeTrendCharts() {
                 }
             }
         });
-            console.log('Trend chart created successfully');
         } catch (error) {
-            console.error('Error creating trend chart:', error);
+            // Chart creation failed silently
         }
     }
 
