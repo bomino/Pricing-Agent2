@@ -405,6 +405,21 @@ window.switchTab = function(button, tabName) {
     const targetPane = document.getElementById(tabName + '-tab');
     if (targetPane) {
         targetPane.style.display = 'block';
+
+        // For reports tab, always load fresh content via HTMX
+        if (tabName === 'reports' && typeof htmx !== 'undefined') {
+            // Check if content is empty or just placeholder
+            if (!targetPane.querySelector('.report-card')) {
+                htmx.ajax('GET', '/analytics/tab/reports/', '#reports-tab').then(() => {
+                    document.querySelectorAll('#reports-tab .p-4.bg-white.border').forEach(el => {
+                        if (!el.classList.contains('card-style')) {
+                            el.classList.add('card-style');
+                        }
+                    });
+                });
+            }
+        }
+
         // Initialize charts for tabs that need them
         setTimeout(() => {
             if (typeof window.initializeTabContent === 'function') {
@@ -864,73 +879,9 @@ window.closeReportModal = function() {
             </div>
         </div>
 
-        <!-- Reports Tab -->
+        <!-- Reports Tab - Content loaded via HTMX -->
         <div id="reports-tab" class="tab-pane" style="display: none;">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- Report Templates -->
-                <div class="report-card" onclick="generateReport('spend_analysis')">
-                    <i class="fas fa-chart-bar text-3xl text-blue-600 mb-3"></i>
-                    <h4 class="font-semibold">Spend Analysis Report</h4>
-                    <p class="text-sm text-gray-600 mt-2">Comprehensive spending breakdown by category, supplier, and time period</p>
-                </div>
-
-                <div class="report-card" onclick="generateReport('supplier_performance')">
-                    <i class="fas fa-users text-3xl text-green-600 mb-3"></i>
-                    <h4 class="font-semibold">Supplier Performance</h4>
-                    <p class="text-sm text-gray-600 mt-2">Detailed supplier metrics, compliance, and quality scores</p>
-                </div>
-
-                <div class="report-card" onclick="generateReport('savings_opportunities')">
-                    <i class="fas fa-piggy-bank text-3xl text-yellow-600 mb-3"></i>
-                    <h4 class="font-semibold">Savings Opportunities</h4>
-                    <p class="text-sm text-gray-600 mt-2">Identified cost reduction opportunities with action plans</p>
-                </div>
-
-                <div class="report-card" onclick="generateReport('price_trends')">
-                    <i class="fas fa-chart-line text-3xl text-purple-600 mb-3"></i>
-                    <h4 class="font-semibold">Price Trend Analysis</h4>
-                    <p class="text-sm text-gray-600 mt-2">Historical price movements and future predictions</p>
-                </div>
-
-                <div class="report-card" onclick="generateReport('contract_compliance')">
-                    <i class="fas fa-file-contract text-3xl text-red-600 mb-3"></i>
-                    <h4 class="font-semibold">Contract Compliance</h4>
-                    <p class="text-sm text-gray-600 mt-2">Contract adherence and maverick spend analysis</p>
-                </div>
-
-                <div class="report-card" onclick="generateReport('executive_summary')">
-                    <i class="fas fa-briefcase text-3xl text-navy-600 mb-3"></i>
-                    <h4 class="font-semibold">Executive Summary</h4>
-                    <p class="text-sm text-gray-600 mt-2">High-level overview for leadership presentation</p>
-                </div>
-            </div>
-
-            <!-- Recent Reports -->
-            <div class="analysis-card">
-                <h3 class="text-lg font-semibold text-navy-900 mb-3 flex items-center">
-                    <i class="fas fa-history text-gray-600 mr-2"></i>
-                    Recent Reports
-                </h3>
-                <div class="space-y-2">
-                    {% for report in recent_reports %}
-                    <div class="flex justify-between items-center p-3 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200 hover:shadow-md transition-all duration-200">
-                        <div>
-                            <p class="font-medium text-sm">{{ report.name }}</p>
-                            <p class="text-xs text-gray-500">Generated {{ report.created_at|timesince }} ago</p>
-                        </div>
-                        <div class="flex gap-1">
-                            <button class="text-xs px-2 py-1 text-navy-700 hover:bg-navy-700 hover:text-white border border-navy-700 rounded transition-colors duration-200">View</button>
-                            <button class="text-xs px-2 py-1 text-gray-600 hover:bg-gray-600 hover:text-white border border-gray-600 rounded transition-colors duration-200">Download</button>
-                        </div>
-                    </div>
-                    {% empty %}
-                    <div class="text-center py-8 text-gray-500">
-                        <i class="fas fa-file-alt text-2xl mb-2 opacity-50"></i>
-                        <p class="text-sm">No reports generated yet</p>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
+            <!-- Content will be loaded via HTMX when tab is clicked -->
         </div>
     </div>
 </div>
