@@ -1,0 +1,108 @@
+<!-- Report Schedule Modal -->
+<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+     id="report-schedule-modal"
+     onclick="if(event.target === this) this.remove()">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <!-- Modal Header -->
+        <div class="flex justify-between items-center px-6 py-4 border-b">
+            <h3 class="text-lg font-semibold text-gray-900">
+                <i class="fas fa-calendar-alt text-blue-600 mr-2"></i>
+                {% if report.is_scheduled %}Edit{% else %}Create{% endif %} Schedule
+            </h3>
+            <button onclick="this.closest('#report-schedule-modal').remove()"
+                    class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <form hx-post="/analytics/reports/{{ report.id }}/schedule/"
+              hx-target="#schedule-result"
+              hx-swap="innerHTML">
+            {% csrf_token %}
+            <div class="p-6">
+                <div class="mb-4">
+                    <p class="text-sm text-gray-600 mb-4">
+                        Schedule automatic generation of <strong>{{ report.name }}</strong>
+                    </p>
+                </div>
+
+                <!-- Current schedule info -->
+                {% if report.is_scheduled %}
+                <div class="mb-4 p-3 bg-blue-50 rounded-lg">
+                    <p class="text-sm text-blue-800">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        Currently scheduled: <strong>{{ report.schedule_frequency|title }}</strong>
+                        {% if report.next_run %}
+                        - Next run: {{ report.next_run|date:"M d, Y" }}
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
+
+                <!-- Frequency selection -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Frequency
+                    </label>
+                    <select name="frequency"
+                            class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Select frequency...</option>
+                        <option value="daily" {% if report.schedule_frequency == 'daily' %}selected{% endif %}>Daily</option>
+                        <option value="weekly" {% if report.schedule_frequency == 'weekly' %}selected{% endif %}>Weekly</option>
+                        <option value="bi-weekly" {% if report.schedule_frequency == 'bi-weekly' %}selected{% endif %}>Bi-Weekly</option>
+                        <option value="monthly" {% if report.schedule_frequency == 'monthly' %}selected{% endif %}>Monthly</option>
+                        <option value="quarterly" {% if report.schedule_frequency == 'quarterly' %}selected{% endif %}>Quarterly</option>
+                    </select>
+                </div>
+
+                <!-- Notify users -->
+                <div class="mb-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="notify_on_complete"
+                               class="rounded text-blue-600 focus:ring-blue-500"
+                               {% if report.notify_on_complete %}checked{% endif %}>
+                        <span class="text-sm text-gray-700">Notify me when report is generated</span>
+                    </label>
+                </div>
+
+                <!-- Auto-email -->
+                <div class="mb-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="auto_email"
+                               class="rounded text-blue-600 focus:ring-blue-500">
+                        <span class="text-sm text-gray-700">Automatically email report to me</span>
+                    </label>
+                </div>
+
+                <!-- Schedule result -->
+                <div id="schedule-result"></div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="flex justify-between px-6 py-4 border-t bg-gray-50">
+                <div>
+                    {% if report.is_scheduled %}
+                    <button type="button"
+                            class="btn btn-outline text-red-600 hover:bg-red-50"
+                            hx-delete="/analytics/reports/{{ report.id }}/schedule/delete/"
+                            hx-target="#schedule-result"
+                            hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+                        <i class="fas fa-trash mr-2"></i>Remove Schedule
+                    </button>
+                    {% endif %}
+                </div>
+                <div class="flex gap-3">
+                    <button type="button"
+                            onclick="this.closest('#report-schedule-modal').remove()"
+                            class="btn btn-outline">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save mr-2"></i>Save Schedule
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>

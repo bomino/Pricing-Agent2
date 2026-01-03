@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 AI Pricing Agent for Manufacturing & Construction Procurement - An enterprise B2B platform that automates cost benchmarking, validates quotes, and generates should-cost models using ML to enable 10-15% cost reduction in procurement operations.
 
 **Status**: Phase 1 & Phase 2 Complete (January 2026)
-**Latest Update**: Fixed Analytics charts, replaced hardcoded values with calculated metrics across all views
+**Latest Update**: Added complete report management system with preview, share, schedule, and delete functionality
 
 ## Architecture
 
@@ -257,6 +257,21 @@ Always add `--settings=pricing_agent.settings_local` when running locally.
 - `/api/notifications/mark-all-read/` - Mark notifications read
 - `/api/dashboard/recent-rfqs/` - Recent RFQs for dashboard
 - `/api/dashboard/price-alerts/` - Active alerts for dashboard
+
+### Report Management System (Analytics)
+Complete report management system with HTMX-powered modals:
+- **Endpoints Added:**
+  - `/analytics/reports/refresh/` - Refresh recent reports list
+  - `/analytics/reports/filter/` - Filter reports by type
+  - `/analytics/reports/more/` - Pagination for reports
+  - `/analytics/reports/<uuid:pk>/preview/` - Report preview modal
+  - `/analytics/reports/<uuid:pk>/delete/` - Delete report
+  - `/analytics/reports/<uuid:pk>/share/` - Share report modal
+  - `/analytics/reports/<uuid:pk>/schedule/` - Schedule report modal
+  - `/analytics/reports/schedule/new/` - Create new scheduled report
+  - `/analytics/reports/builder/` - Custom report builder
+- **Views Added:** ReportsRefreshView, ReportsFilterView, ReportPreviewView, ReportDeleteView, ReportShareView, ReportScheduleView, ReportScheduleNewView, ReportBuilderView
+- **Templates Added:** `templates/analytics/partials/` with modal templates for preview, share, schedule, and builder
 
 ## Firefox Compatibility
 

@@ -1,0 +1,111 @@
+<!-- Recent Reports List Partial - Used by refresh/filter/more endpoints -->
+{% for report in recent_reports %}
+<div class="flex justify-between items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+    <div class="flex items-center">
+        <div class="mr-4">
+            {% if report.report_type == 'spend_analysis' %}
+                <i class="fas fa-chart-bar text-blue-600 text-xl"></i>
+            {% elif report.report_type == 'supplier_performance' %}
+                <i class="fas fa-users text-green-600 text-xl"></i>
+            {% elif report.report_type == 'savings_opportunities' %}
+                <i class="fas fa-piggy-bank text-yellow-600 text-xl"></i>
+            {% elif report.report_type == 'price_trends' %}
+                <i class="fas fa-chart-line text-purple-600 text-xl"></i>
+            {% elif report.report_type == 'contract_compliance' %}
+                <i class="fas fa-file-contract text-red-600 text-xl"></i>
+            {% elif report.report_type == 'executive_summary' %}
+                <i class="fas fa-briefcase text-navy-600 text-xl"></i>
+            {% elif report.report_type == 'custom' %}
+                <i class="fas fa-cogs text-gray-600 text-xl"></i>
+            {% else %}
+                <i class="fas fa-file-alt text-gray-600 text-xl"></i>
+            {% endif %}
+        </div>
+        <div>
+            <p class="font-medium text-gray-900">{{ report.name }}</p>
+            <div class="flex items-center gap-3 text-sm text-gray-500 mt-1">
+                <span><i class="fas fa-calendar-alt mr-1"></i>{{ report.created_at|date:"M d, Y" }}</span>
+                <span><i class="fas fa-clock mr-1"></i>{{ report.created_at|timesince }} ago</span>
+                {% if report.created_by %}
+                <span><i class="fas fa-user mr-1"></i>{{ report.created_by.get_full_name|default:report.created_by.username }}</span>
+                {% endif %}
+                {% if report.status == 'completed' %}
+                    <span class="text-green-600"><i class="fas fa-check-circle mr-1"></i>Completed</span>
+                {% elif report.status == 'processing' %}
+                    <span class="text-blue-600"><i class="fas fa-spinner fa-spin mr-1"></i>Processing</span>
+                {% elif report.status == 'failed' %}
+                    <span class="text-red-600"><i class="fas fa-times-circle mr-1"></i>Failed</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="flex gap-2">
+        <!-- Preview button -->
+        <button class="btn btn-sm btn-outline"
+                hx-get="/analytics/reports/{{ report.id }}/preview/"
+                hx-target="#modal-container"
+                hx-swap="innerHTML"
+                title="Preview Report">
+            <i class="fas fa-eye"></i>
+        </button>
+
+        <!-- Download button -->
+        {% if report.status == 'completed' %}
+        <a href="/analytics/reports/{{ report.id }}/download/"
+           class="btn btn-sm btn-primary"
+           download
+           title="Download CSV">
+            <i class="fas fa-download"></i>
+        </a>
+        {% endif %}
+
+        <!-- Share button -->
+        <button class="btn btn-sm btn-outline"
+                hx-get="/analytics/reports/{{ report.id }}/share/"
+                hx-target="#modal-container"
+                hx-swap="innerHTML"
+                title="Share Report">
+            <i class="fas fa-share-alt"></i>
+        </button>
+
+        <!-- Schedule button -->
+        <button class="btn btn-sm btn-outline"
+                hx-get="/analytics/reports/{{ report.id }}/schedule/"
+                hx-target="#modal-container"
+                hx-swap="innerHTML"
+                title="Schedule Report">
+            <i class="fas fa-calendar-alt"></i>
+        </button>
+
+        <!-- Delete button -->
+        <button class="btn btn-sm btn-outline text-red-600 hover:bg-red-50"
+                hx-delete="/analytics/reports/{{ report.id }}/delete/"
+                hx-target="closest div.flex.justify-between"
+                hx-swap="outerHTML"
+                hx-confirm="Are you sure you want to delete this report?"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                title="Delete Report">
+            <i class="fas fa-trash"></i>
+        </button>
+    </div>
+</div>
+{% empty %}
+{% if not append_mode %}
+<div class="text-center py-8 text-gray-500">
+    <i class="fas fa-file-alt text-4xl mb-3"></i>
+    <p>No reports generated yet</p>
+    <p class="text-sm mt-2">Click on any report template above to generate your first report</p>
+</div>
+{% endif %}
+{% endfor %}
+
+{% if next_offset %}
+<div class="text-center mt-4">
+    <button class="btn btn-sm btn-outline"
+            hx-get="/analytics/reports/more/?offset={{ next_offset }}"
+            hx-target="#recent-reports-list"
+            hx-swap="beforeend">
+        Load More Reports
+    </button>
+</div>
+{% endif %}

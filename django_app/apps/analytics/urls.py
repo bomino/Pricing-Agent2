@@ -25,6 +25,19 @@ urlpatterns = [
     path('reports/<uuid:pk>/', views.ReportDetailView.as_view(), name='report_detail'),
     path('reports/<uuid:pk>/download/', views.ReportDownloadView.as_view(), name='report_download'),
     path('reports/generate/', views.ReportGenerateView.as_view(), name='report_generate'),
+
+    # Report management (HTMX endpoints)
+    path('reports/refresh/', views.ReportsRefreshView.as_view(), name='reports_refresh'),
+    path('reports/filter/', views.ReportsFilterView.as_view(), name='reports_filter'),
+    path('reports/more/', views.ReportsMoreView.as_view(), name='reports_more'),
+    path('reports/<uuid:pk>/preview/', views.ReportPreviewView.as_view(), name='report_preview'),
+    path('reports/<uuid:pk>/delete/', views.ReportDeleteView.as_view(), name='report_delete'),
+    path('reports/<uuid:pk>/share/', views.ReportShareView.as_view(), name='report_share'),
+    path('reports/<uuid:pk>/schedule/', views.ReportScheduleView.as_view(), name='report_schedule'),
+    path('reports/<uuid:pk>/schedule/edit/', views.ReportScheduleView.as_view(), name='report_schedule_edit'),
+    path('reports/<uuid:pk>/schedule/delete/', views.ReportScheduleDeleteView.as_view(), name='report_schedule_delete'),
+    path('reports/schedule/new/', views.ReportScheduleNewView.as_view(), name='report_schedule_new'),
+    path('reports/builder/', views.ReportBuilderView.as_view(), name='report_builder'),
     
     # Data export
     path('export/pricing/', views.PricingDataExportView.as_view(), name='pricing_export'),

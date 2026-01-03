@@ -1988,3 +1988,461 @@ class ReportsTabView(OrganizationRequiredMixin, TemplateView):
             template['last_generated'] = last_report.created_at if last_report else None
 
         return report_types
+
+
+class ReportsRefreshView(OrganizationRequiredMixin, TemplateView):
+    """Refresh recent reports list via HTMX"""
+    template_name = 'analytics/partials/recent_reports_list.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        organization = self.get_user_organization()
+
+        recent_reports = Report.objects.filter(
+            organization=organization
+        ).order_by('-created_at')[:10]
+
+        context['recent_reports'] = recent_reports
+        return context
+
+
+class ReportsFilterView(OrganizationRequiredMixin, TemplateView):
+    """Filter reports by type via HTMX"""
+    template_name = 'analytics/partials/recent_reports_list.html'
+
+    def get(self, request, *args, **kwargs):
+        organization = self.get_user_organization()
+        report_type = request.GET.get('type', 'all')
+
+        queryset = Report.objects.filter(organization=organization)
+
+        if report_type != 'all':
+            queryset = queryset.filter(report_type=report_type)
+
+        recent_reports = queryset.order_by('-created_at')[:10]
+
+        return self.render_to_response({'recent_reports': recent_reports})
+
+
+class ReportPreviewView(OrganizationRequiredMixin, TemplateView):
+    """Preview a report in a modal"""
+    template_name = 'analytics/partials/report_preview_modal.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        organization = self.get_user_organization()
+        report_id = self.kwargs.get('pk')
+
+        try:
+            report = Report.objects.get(id=report_id, organization=organization)
+            context['report'] = report
+            context['summary_data'] = report.summary_data or {}
+        except Report.DoesNotExist:
+            context['error'] = 'Report not found'
+
+        return context
+
+
+class ReportDeleteView(OrganizationRequiredMixin, TemplateView):
+    """Delete a report"""
+
+    def delete(self, request, pk, *args, **kwargs):
+        organization = self.get_user_organization()
+
+        try:
+            report = Report.objects.get(id=pk, organization=organization)
+            report_name = report.name
+            report.delete()
+
+            # Return empty response for HTMX to remove the element
+            return HttpResponse(
+                f'<div class="bg-green-50 text-green-800 p-3 rounded-lg text-sm">'
+                f'<i class="fas fa-check-circle mr-2"></i>Report "{report_name}" deleted successfully'
+                f'</div>'
+            )
+        except Report.DoesNotExist:
+            return HttpResponse(
+                '<div class="bg-red-50 text-red-800 p-3 rounded-lg text-sm">'
+                '<i class="fas fa-exclamation-circle mr-2"></i>Report not found'
+                '</div>',
+                status=404
+            )
+
+    def post(self, request, pk, *args, **kwargs):
+        """Allow POST for delete as fallback"""
+        return self.delete(request, pk, *args, **kwargs)
+
+
+class ReportShareView(OrganizationRequiredMixin, TemplateView):
+    """Share a report - show share modal or process share"""
+    template_name = 'analytics/partials/report_share_modal.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        organization = self.get_user_organization()
+        report_id = self.kwargs.get('pk')
+
+        try:
+            report = Report.objects.get(id=report_id, organization=organization)
+            context['report'] = report
+            # Get users in organization for sharing
+            from apps.accounts.models import User, UserProfile
+            context['users'] = User.objects.filter(
+                profile__organization=organization,
+                is_active=True
+            ).exclude(id=self.request.user.id)
+        except Report.DoesNotExist:
+            context['error'] = 'Report not found'
+
+        return context
+
+    def post(self, request, pk, *args, **kwargs):
+        """Process share request"""
+        organization = self.get_user_organization()
+
+        try:
+            report = Report.objects.get(id=pk, organization=organization)
+            user_ids = request.POST.getlist('users')
+
+            if user_ids:
+                from apps.accounts.models import User
+                users = User.objects.filter(id__in=user_ids)
+                report.shared_with.add(*users)
+                report.save()
+
+                return HttpResponse(
+                    f'<div class="bg-green-50 text-green-800 p-3 rounded-lg text-sm">'
+                    f'<i class="fas fa-check-circle mr-2"></i>Report shared with {len(user_ids)} user(s)'
+                    f'</div>'
+                )
+            else:
+                return HttpResponse(
+                    '<div class="bg-yellow-50 text-yellow-800 p-3 rounded-lg text-sm">'
+                    '<i class="fas fa-exclamation-triangle mr-2"></i>Please select at least one user'
+                    '</div>',
+                    status=400
+                )
+        except Report.DoesNotExist:
+            return HttpResponse(
+                '<div class="bg-red-50 text-red-800 p-3 rounded-lg text-sm">'
+                '<i class="fas fa-exclamation-circle mr-2"></i>Report not found'
+                '</div>',
+                status=404
+            )
+
+
+class ReportScheduleView(OrganizationRequiredMixin, TemplateView):
+    """Schedule a report - show schedule modal or process schedule"""
+    template_name = 'analytics/partials/report_schedule_modal.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        organization = self.get_user_organization()
+        report_id = self.kwargs.get('pk')
+
+        try:
+            report = Report.objects.get(id=report_id, organization=organization)
+            context['report'] = report
+            context['schedule_frequencies'] = [
+                ('daily', 'Daily'),
+                ('weekly', 'Weekly'),
+                ('monthly', 'Monthly'),
+                ('quarterly', 'Quarterly'),
+            ]
+        except Report.DoesNotExist:
+            context['error'] = 'Report not found'
+
+        return context
+
+    def post(self, request, pk, *args, **kwargs):
+        """Process schedule request"""
+        organization = self.get_user_organization()
+
+        try:
+            report = Report.objects.get(id=pk, organization=organization)
+            frequency = request.POST.get('frequency')
+            next_run_str = request.POST.get('next_run')
+
+            if frequency:
+                report.is_scheduled = True
+                report.schedule_frequency = frequency
+
+                if next_run_str:
+                    from datetime import datetime
+                    try:
+                        report.next_run = datetime.fromisoformat(next_run_str)
+                    except ValueError:
+                        pass
+
+                report.save()
+
+                return HttpResponse(
+                    f'<div class="bg-green-50 text-green-800 p-3 rounded-lg text-sm">'
+                    f'<i class="fas fa-check-circle mr-2"></i>Report scheduled ({frequency})'
+                    f'</div>'
+                )
+            else:
+                return HttpResponse(
+                    '<div class="bg-yellow-50 text-yellow-800 p-3 rounded-lg text-sm">'
+                    '<i class="fas fa-exclamation-triangle mr-2"></i>Please select a frequency'
+                    '</div>',
+                    status=400
+                )
+        except Report.DoesNotExist:
+            return HttpResponse(
+                '<div class="bg-red-50 text-red-800 p-3 rounded-lg text-sm">'
+                '<i class="fas fa-exclamation-circle mr-2"></i>Report not found'
+                '</div>',
+                status=404
+            )
+
+
+class ReportScheduleDeleteView(OrganizationRequiredMixin, TemplateView):
+    """Remove schedule from a report"""
+
+    def delete(self, request, pk, *args, **kwargs):
+        organization = self.get_user_organization()
+
+        try:
+            report = Report.objects.get(id=pk, organization=organization)
+            report.is_scheduled = False
+            report.schedule_frequency = None
+            report.next_run = None
+            report.save()
+
+            return HttpResponse(
+                '<div class="bg-green-50 text-green-800 p-3 rounded-lg text-sm">'
+                '<i class="fas fa-check-circle mr-2"></i>Schedule removed'
+                '</div>'
+            )
+        except Report.DoesNotExist:
+            return HttpResponse(
+                '<div class="bg-red-50 text-red-800 p-3 rounded-lg text-sm">'
+                '<i class="fas fa-exclamation-circle mr-2"></i>Report not found'
+                '</div>',
+                status=404
+            )
+
+    def post(self, request, pk, *args, **kwargs):
+        """Allow POST for delete as fallback"""
+        return self.delete(request, pk, *args, **kwargs)
+
+
+class ReportsMoreView(OrganizationRequiredMixin, TemplateView):
+    """Load more reports for pagination"""
+    template_name = 'analytics/partials/recent_reports_list.html'
+
+    def get(self, request, *args, **kwargs):
+        organization = self.get_user_organization()
+        offset = int(request.GET.get('offset', 10))
+
+        recent_reports = Report.objects.filter(
+            organization=organization
+        ).order_by('-created_at')[offset:offset + 10]
+
+        return self.render_to_response({
+            'recent_reports': recent_reports,
+            'append_mode': True,
+            'next_offset': offset + 10 if recent_reports.count() == 10 else None
+        })
+
+
+class ReportScheduleNewView(OrganizationRequiredMixin, TemplateView):
+    """Create a new scheduled report"""
+    template_name = 'analytics/partials/schedule_new_modal.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Provide report type options for scheduling
+        context['report_types'] = [
+            {'type': 'spend_analysis', 'name': 'Spend Analysis Report'},
+            {'type': 'supplier_performance', 'name': 'Supplier Performance'},
+            {'type': 'savings_opportunities', 'name': 'Savings Opportunities'},
+            {'type': 'price_trends', 'name': 'Price Trend Analysis'},
+            {'type': 'contract_compliance', 'name': 'Contract Compliance'},
+            {'type': 'executive_summary', 'name': 'Executive Summary'},
+        ]
+        context['frequency_options'] = [
+            {'value': 'daily', 'label': 'Daily'},
+            {'value': 'weekly', 'label': 'Weekly'},
+            {'value': 'bi-weekly', 'label': 'Bi-Weekly'},
+            {'value': 'monthly', 'label': 'Monthly'},
+            {'value': 'quarterly', 'label': 'Quarterly'},
+        ]
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Create a new scheduled report"""
+        organization = self.get_user_organization()
+
+        report_type = request.POST.get('report_type')
+        frequency = request.POST.get('frequency')
+        report_name = request.POST.get('name', f'Scheduled {report_type.replace("_", " ").title()}')
+
+        if not report_type or not frequency:
+            return HttpResponse(
+                '<div class="bg-red-50 text-red-800 p-3 rounded-lg text-sm">'
+                '<i class="fas fa-exclamation-circle mr-2"></i>Report type and frequency are required'
+                '</div>',
+                status=400
+            )
+
+        # Calculate next run based on frequency
+        now = timezone.now()
+        if frequency == 'daily':
+            next_run = now + timedelta(days=1)
+        elif frequency == 'weekly':
+            next_run = now + timedelta(weeks=1)
+        elif frequency == 'bi-weekly':
+            next_run = now + timedelta(weeks=2)
+        elif frequency == 'monthly':
+            next_run = now + timedelta(days=30)
+        elif frequency == 'quarterly':
+            next_run = now + timedelta(days=90)
+        else:
+            next_run = now + timedelta(days=7)
+
+        # Create the scheduled report
+        report = Report.objects.create(
+            name=report_name,
+            report_type=report_type,
+            organization=organization,
+            created_by=request.user,
+            is_scheduled=True,
+            schedule_frequency=frequency,
+            next_run=next_run,
+            status='pending'
+        )
+
+        return HttpResponse(
+            f'<div class="bg-green-50 text-green-800 p-3 rounded-lg text-sm">'
+            f'<i class="fas fa-check-circle mr-2"></i>Scheduled report "{report.name}" created. '
+            f'Next run: {next_run.strftime("%b %d, %Y")}'
+            f'</div>'
+            f'<script>setTimeout(function(){{ htmx.trigger("#reports-tab-content", "refresh"); }}, 1500);</script>'
+        )
+
+
+class ReportBuilderView(OrganizationRequiredMixin, TemplateView):
+    """Custom report builder modal"""
+    template_name = 'analytics/partials/report_builder_modal.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        organization = self.get_user_organization()
+
+        # Get available data sources for custom reports
+        from apps.pricing.models import Material, Price
+        from apps.procurement.models import Supplier, PurchaseOrder
+
+        context['data_sources'] = [
+            {
+                'id': 'materials',
+                'name': 'Materials',
+                'count': Material.objects.filter(organization=organization).count(),
+                'fields': ['name', 'category', 'unit', 'description']
+            },
+            {
+                'id': 'prices',
+                'name': 'Prices',
+                'count': Price.objects.filter(material__organization=organization).count(),
+                'fields': ['material', 'supplier', 'price', 'effective_date']
+            },
+            {
+                'id': 'suppliers',
+                'name': 'Suppliers',
+                'count': Supplier.objects.filter(organization=organization).count(),
+                'fields': ['name', 'code', 'status', 'rating']
+            },
+            {
+                'id': 'orders',
+                'name': 'Purchase Orders',
+                'count': PurchaseOrder.objects.filter(organization=organization).count(),
+                'fields': ['po_number', 'supplier', 'total_amount', 'status', 'order_date']
+            },
+        ]
+
+        context['output_formats'] = [
+            {'value': 'csv', 'label': 'CSV (Spreadsheet)', 'icon': 'fa-file-csv'},
+            {'value': 'json', 'label': 'JSON (Data)', 'icon': 'fa-file-code'},
+            {'value': 'pdf', 'label': 'PDF (Document)', 'icon': 'fa-file-pdf'},
+        ]
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Generate a custom report based on builder configuration"""
+        organization = self.get_user_organization()
+
+        report_name = request.POST.get('name', 'Custom Report')
+        data_source = request.POST.get('data_source')
+        output_format = request.POST.get('format', 'csv')
+        selected_fields = request.POST.getlist('fields')
+
+        if not data_source:
+            return HttpResponse(
+                '<div class="bg-red-50 text-red-800 p-3 rounded-lg text-sm">'
+                '<i class="fas fa-exclamation-circle mr-2"></i>Please select a data source'
+                '</div>',
+                status=400
+            )
+
+        # Create report record
+        report = Report.objects.create(
+            name=report_name,
+            report_type='custom',
+            organization=organization,
+            created_by=request.user,
+            status='processing',
+            config={
+                'data_source': data_source,
+                'fields': selected_fields,
+                'format': output_format
+            }
+        )
+
+        # Generate the report data
+        try:
+            report_data = self._generate_custom_report(organization, data_source, selected_fields)
+            report.data = report_data
+            report.status = 'completed'
+            report.save()
+
+            return HttpResponse(
+                f'<div class="bg-green-50 text-green-800 p-3 rounded-lg text-sm">'
+                f'<i class="fas fa-check-circle mr-2"></i>Report "{report_name}" generated successfully! '
+                f'<a href="/analytics/reports/{report.id}/download/" class="underline font-medium">Download</a>'
+                f'</div>'
+                f'<script>setTimeout(function(){{ htmx.trigger("#reports-tab-content", "refresh"); }}, 1500);</script>'
+            )
+        except Exception as e:
+            report.status = 'failed'
+            report.save()
+            return HttpResponse(
+                f'<div class="bg-red-50 text-red-800 p-3 rounded-lg text-sm">'
+                f'<i class="fas fa-exclamation-circle mr-2"></i>Failed to generate report: {str(e)}'
+                f'</div>',
+                status=500
+            )
+
+    def _generate_custom_report(self, organization, data_source, fields):
+        """Generate custom report data based on source and fields"""
+        from apps.pricing.models import Material, Price
+        from apps.procurement.models import Supplier, PurchaseOrder
+
+        if data_source == 'materials':
+            queryset = Material.objects.filter(organization=organization)
+            data = list(queryset.values(*fields) if fields else queryset.values())
+        elif data_source == 'prices':
+            queryset = Price.objects.filter(material__organization=organization)
+            data = list(queryset.values(*fields) if fields else queryset.values())
+        elif data_source == 'suppliers':
+            queryset = Supplier.objects.filter(organization=organization)
+            data = list(queryset.values(*fields) if fields else queryset.values())
+        elif data_source == 'orders':
+            queryset = PurchaseOrder.objects.filter(organization=organization)
+            data = list(queryset.values(*fields) if fields else queryset.values())
+        else:
+            data = []
+
+        return {'records': data, 'count': len(data)}
