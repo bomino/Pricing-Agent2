@@ -316,7 +316,7 @@ class AnalyticsDashboardView(OrganizationRequiredMixin, TemplateView):
 
     def _get_calculated_benchmarks(self, organization):
         """Calculate benchmark metrics from database"""
-        from apps.procurement.models import PurchaseOrder, RFQ, Quote
+        from apps.procurement.models import PurchaseOrder, RFQ, Quote, Supplier
         from django.db.models import Avg
 
         # Cost per order
