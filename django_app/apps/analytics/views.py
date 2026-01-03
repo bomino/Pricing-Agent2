@@ -347,12 +347,28 @@ class AnalyticsDashboardView(OrganizationRequiredMixin, TemplateView):
             rfq__organization=organization,
             status='accepted'
         ).count()
-        your_quality = round((accepted_quotes / total_quotes * 100) if total_quotes > 0 else 92)
+        your_quality = round((accepted_quotes / total_quotes * 100) if total_quotes > 0 else 0)
+
+        # Order accuracy (completed vs total POs)
+        total_pos = PurchaseOrder.objects.filter(organization=organization).count()
+        completed_pos = PurchaseOrder.objects.filter(
+            organization=organization,
+            status='completed'
+        ).count()
+        order_accuracy = round((completed_pos / total_pos * 100) if total_pos > 0 else 0)
+
+        # Supplier diversity (unique active suppliers / total)
+        total_suppliers = Supplier.objects.filter(organization=organization).count()
+        active_suppliers = Supplier.objects.filter(
+            organization=organization,
+            status='active'
+        ).count()
+        supplier_diversity = round((active_suppliers / total_suppliers * 100) if total_suppliers > 0 else 0)
 
         return [
             {
                 'metric': 'Cost per Order',
-                'your_value': f'${your_cost_per_order:,}',
+                'your_value': f'${your_cost_per_order:,}' if your_cost_per_order > 0 else 'N/A',
                 'industry_avg': '$150',
                 'best_in_class': '$95',
                 'gap': round((150 - your_cost_per_order) / 150 * 100) if your_cost_per_order > 0 else 0
@@ -366,10 +382,24 @@ class AnalyticsDashboardView(OrganizationRequiredMixin, TemplateView):
             },
             {
                 'metric': 'Quote Acceptance Rate',
-                'your_value': f'{your_quality}%',
+                'your_value': f'{your_quality}%' if your_quality > 0 else 'N/A',
                 'industry_avg': '88%',
                 'best_in_class': '95%',
-                'gap': your_quality - 88
+                'gap': your_quality - 88 if your_quality > 0 else 0
+            },
+            {
+                'metric': 'Order Accuracy',
+                'your_value': f'{order_accuracy}%' if order_accuracy > 0 else 'N/A',
+                'industry_avg': '94%',
+                'best_in_class': '99%',
+                'gap': order_accuracy - 94 if order_accuracy > 0 else 0
+            },
+            {
+                'metric': 'Supplier Diversity',
+                'your_value': f'{supplier_diversity}%' if supplier_diversity > 0 else 'N/A',
+                'industry_avg': '25%',
+                'best_in_class': '35%',
+                'gap': supplier_diversity - 25 if supplier_diversity > 0 else 0
             },
         ]
 

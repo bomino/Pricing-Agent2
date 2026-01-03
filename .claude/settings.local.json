@@ -1,7 +1,26 @@
 {
   "permissions": {
     "allow": [
-      "Bash(del test_firefox_fix.html)"
+      "Bash(del test_firefox_fix.html)",
+      "Bash(docker-compose:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(docker ps:*)",
+      "Bash(del \"c:\\\\Users\\\\MLawali\\\\Documents\\\\Projects\\\\DEF-Projects\\\\RD\\\\Pricing-Agent2\\\\docker-compose.override.yml\")",
+      "Bash(docker logs:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker cp:*)",
+      "Bash(timeout 10 docker-compose:*)",
+      "Bash(curl:*)",
+      "Bash(timeout 5 docker-compose:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: Replace hardcoded values with calculated data across views and templates\n\n- Fix pricing URLs to use UUID primary keys instead of integers\n- Create MaterialPriceHistoryView with calculated statistics \\(current, avg, min, max prices\\)\n- Create material_detail.html template with calculated pricing and order metrics\n- Fix PriceListView to query Price model instead of empty PriceHistory model\n- Create prices_list.html template with filtering and calculated statistics\n- Add notification API endpoints to eliminate 404 errors in header HTMX polling\n- Add dashboard API endpoints for RFQs and price alerts\n- Fix DashboardView to calculate actual MTD spend and trend percentage\n- Update analytics views with calculated prediction metrics\n- Update procurement views with calculated supplier and RFQ statistics\n- Fix template discrepancies between material-specific and all-prices views\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(cmdkey /list:*)",
+      "Bash(git config:*)",
+      "Bash(gh auth:*)",
+      "Bash(del \"c:\\\\Users\\\\MLawali\\\\Documents\\\\Projects\\\\DEF-Projects\\\\RD\\\\Pricing-Agent2\\\\django_app\\\\templates\\\\dashboard_old.html\")"
     ],
     "deny": [],
     "ask": []
