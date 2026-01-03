@@ -454,34 +454,553 @@ class ReportDetailView(OrganizationRequiredMixin, DetailView):
 
 
 class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
-    """Generate new report"""
+    """Generate new report with calculated data"""
     template_name = 'analytics/report_generate.html'
-    
+
     def post(self, request, *args, **kwargs):
+        from apps.procurement.models import PurchaseOrder, Supplier, RFQ, Quote
+        from apps.pricing.models import Material, Price
+        from django.db.models import Avg, Sum, Count, Max, Min
+        from datetime import date
+
         report_type = request.POST.get('report_type')
         date_from = request.POST.get('date_from')
         date_to = request.POST.get('date_to')
-        
-        # Create new report
+        organization = get_user_organization(request.user)
+
+        # Set default date range (last 30 days) if not provided
+        if not date_to:
+            period_end = date.today()
+        else:
+            period_end = date.fromisoformat(date_to)
+
+        if not date_from:
+            period_start = period_end - timedelta(days=30)
+        else:
+            period_start = date.fromisoformat(date_from)
+
+        # Create report record
         report = Report.objects.create(
-            name=f"{report_type.title()} Report",
+            name=f"{report_type.replace('_', ' ').title()} Report",
             report_type=report_type,
-            organization=get_user_organization(request.user),
+            organization=organization,
             created_by=request.user,
-            parameters={'date_from': date_from, 'date_to': date_to},
+            period_start=period_start,
+            period_end=period_end,
+            parameters={'date_from': str(period_start), 'date_to': str(period_end)},
             status='generating'
         )
-        
-        # This would typically trigger async report generation
-        # For now, just mark as completed
-        report.status = 'completed'
-        report.save()
-        
-        return JsonResponse({
-            'status': 'success',
-            'report_id': report.id,
-            'message': 'Report generated successfully'
-        })
+
+        try:
+            # Generate report data based on type
+            summary_data = self._generate_report_data(
+                report_type, organization, period_start, period_end
+            )
+
+            report.summary_data = summary_data
+            report.total_records = summary_data.get('total_records', 0)
+            report.status = 'completed'
+            report.generated_at = timezone.now()
+            report.save()
+
+            return JsonResponse({
+                'status': 'success',
+                'report_id': str(report.id),
+                'message': f'Report generated successfully with {report.total_records} records'
+            })
+
+        except Exception as e:
+            report.status = 'failed'
+            report.summary_data = {'error': str(e)}
+            report.save()
+
+            return JsonResponse({
+                'status': 'error',
+                'report_id': str(report.id),
+                'message': f'Report generation failed: {str(e)}'
+            }, status=500)
+
+    def _generate_report_data(self, report_type, organization, period_start, period_end):
+        """Generate report data based on report type"""
+        if report_type == 'spend_analysis':
+            return self._generate_spend_analysis(organization, period_start, period_end)
+        elif report_type == 'supplier_performance':
+            return self._generate_supplier_performance(organization, period_start, period_end)
+        elif report_type == 'savings_opportunities':
+            return self._generate_savings_opportunities(organization, period_start, period_end)
+        elif report_type == 'price_trends':
+            return self._generate_price_trends(organization, period_start, period_end)
+        elif report_type == 'contract_compliance':
+            return self._generate_contract_compliance(organization, period_start, period_end)
+        elif report_type == 'executive_summary':
+            return self._generate_executive_summary(organization, period_start, period_end)
+        else:
+            return {'error': f'Unknown report type: {report_type}', 'total_records': 0}
+
+    def _generate_spend_analysis(self, organization, period_start, period_end):
+        """Generate spend analysis report data"""
+        from apps.procurement.models import PurchaseOrder, Supplier
+        from django.db.models import Sum, Count
+
+        # Get POs in date range
+        pos = PurchaseOrder.objects.filter(
+            organization=organization,
+            created_at__date__gte=period_start,
+            created_at__date__lte=period_end
+        )
+
+        total_spend = pos.aggregate(total=Sum('total_amount'))['total'] or 0
+        total_orders = pos.count()
+
+        # Spend by supplier
+        spend_by_supplier = list(pos.filter(supplier__isnull=False).values(
+            'supplier__name'
+        ).annotate(
+            total=Sum('total_amount'),
+            order_count=Count('id')
+        ).order_by('-total')[:10])
+
+        # Spend by status
+        spend_by_status = list(pos.values('status').annotate(
+            total=Sum('total_amount'),
+            count=Count('id')
+        ))
+
+        # Monthly trend
+        monthly_spend = list(pos.extra(
+            select={'month': "strftime('%%Y-%%m', created_at)"}
+        ).values('month').annotate(
+            total=Sum('total_amount')
+        ).order_by('month'))
+
+        return {
+            'report_title': 'Spend Analysis Report',
+            'period': f'{period_start} to {period_end}',
+            'total_spend': float(total_spend),
+            'total_orders': total_orders,
+            'avg_order_value': float(total_spend / total_orders) if total_orders > 0 else 0,
+            'spend_by_supplier': spend_by_supplier,
+            'spend_by_status': spend_by_status,
+            'monthly_trend': monthly_spend,
+            'total_records': total_orders,
+        }
+
+    def _generate_supplier_performance(self, organization, period_start, period_end):
+        """Generate supplier performance report data"""
+        from apps.procurement.models import Supplier, PurchaseOrder, Quote
+
+        suppliers = Supplier.objects.filter(organization=organization)
+        supplier_data = []
+
+        for supplier in suppliers[:20]:
+            pos = PurchaseOrder.objects.filter(
+                organization=organization,
+                supplier=supplier,
+                created_at__date__gte=period_start,
+                created_at__date__lte=period_end
+            )
+            quotes = Quote.objects.filter(
+                supplier=supplier,
+                rfq__organization=organization,
+                created_at__date__gte=period_start,
+                created_at__date__lte=period_end
+            )
+
+            total_spend = pos.aggregate(total=Sum('total_amount'))['total'] or 0
+            completed_pos = pos.filter(status='completed').count()
+            total_pos = pos.count()
+
+            supplier_data.append({
+                'name': supplier.name,
+                'status': supplier.status,
+                'total_spend': float(total_spend),
+                'order_count': total_pos,
+                'quote_count': quotes.count(),
+                'completion_rate': round((completed_pos / total_pos * 100) if total_pos > 0 else 0, 1),
+            })
+
+        # Sort by total spend
+        supplier_data.sort(key=lambda x: x['total_spend'], reverse=True)
+
+        return {
+            'report_title': 'Supplier Performance Report',
+            'period': f'{period_start} to {period_end}',
+            'total_suppliers': suppliers.count(),
+            'active_suppliers': suppliers.filter(status='active').count(),
+            'supplier_details': supplier_data,
+            'total_records': len(supplier_data),
+        }
+
+    def _generate_savings_opportunities(self, organization, period_start, period_end):
+        """Generate savings opportunities report data"""
+        from apps.pricing.models import Price, Material
+        from django.db.models import Avg, StdDev
+
+        opportunities = []
+
+        # Find materials with price variance (potential savings)
+        materials = Material.objects.filter(organization=organization)
+
+        for material in materials[:30]:
+            prices = Price.objects.filter(
+                material=material,
+                organization=organization,
+                time__date__gte=period_start,
+                time__date__lte=period_end
+            )
+
+            if prices.count() >= 2:
+                stats = prices.aggregate(
+                    avg=Avg('price'),
+                    min=Min('price'),
+                    max=Max('price')
+                )
+
+                if stats['avg'] and stats['min'] and stats['max']:
+                    variance = ((stats['max'] - stats['min']) / stats['avg'] * 100) if stats['avg'] > 0 else 0
+
+                    if variance > 10:  # Flag items with >10% price variance
+                        potential_savings = float(stats['max'] - stats['min'])
+                        opportunities.append({
+                            'material': material.name,
+                            'category': material.category or 'Uncategorized',
+                            'avg_price': float(stats['avg']),
+                            'min_price': float(stats['min']),
+                            'max_price': float(stats['max']),
+                            'variance_pct': round(variance, 1),
+                            'potential_savings': round(potential_savings, 2),
+                        })
+
+        # Sort by potential savings
+        opportunities.sort(key=lambda x: x['potential_savings'], reverse=True)
+
+        total_potential = sum(o['potential_savings'] for o in opportunities)
+
+        return {
+            'report_title': 'Savings Opportunities Report',
+            'period': f'{period_start} to {period_end}',
+            'total_opportunities': len(opportunities),
+            'total_potential_savings': round(total_potential, 2),
+            'opportunities': opportunities[:20],
+            'total_records': len(opportunities),
+        }
+
+    def _generate_price_trends(self, organization, period_start, period_end):
+        """Generate price trends report data"""
+        from apps.pricing.models import Price, Material
+        from django.db.models import Avg
+
+        trends = []
+
+        materials = Material.objects.filter(
+            organization=organization,
+            prices__isnull=False
+        ).distinct()[:20]
+
+        for material in materials:
+            prices = Price.objects.filter(
+                material=material,
+                organization=organization,
+                time__date__gte=period_start,
+                time__date__lte=period_end
+            ).order_by('time')
+
+            if prices.exists():
+                first_price = prices.first().price
+                last_price = prices.last().price
+                avg_price = prices.aggregate(avg=Avg('price'))['avg']
+
+                change_pct = ((last_price - first_price) / first_price * 100) if first_price > 0 else 0
+
+                trends.append({
+                    'material': material.name,
+                    'category': material.category or 'Uncategorized',
+                    'first_price': float(first_price),
+                    'last_price': float(last_price),
+                    'avg_price': float(avg_price) if avg_price else 0,
+                    'change_pct': round(change_pct, 1),
+                    'data_points': prices.count(),
+                })
+
+        # Sort by absolute change percentage
+        trends.sort(key=lambda x: abs(x['change_pct']), reverse=True)
+
+        return {
+            'report_title': 'Price Trends Report',
+            'period': f'{period_start} to {period_end}',
+            'materials_analyzed': len(trends),
+            'avg_price_change': round(sum(t['change_pct'] for t in trends) / len(trends), 1) if trends else 0,
+            'trends': trends,
+            'total_records': len(trends),
+        }
+
+    def _generate_contract_compliance(self, organization, period_start, period_end):
+        """Generate contract compliance report data"""
+        from apps.procurement.models import PurchaseOrder
+
+        pos = PurchaseOrder.objects.filter(
+            organization=organization,
+            created_at__date__gte=period_start,
+            created_at__date__lte=period_end
+        )
+
+        total_pos = pos.count()
+        total_spend = pos.aggregate(total=Sum('total_amount'))['total'] or 0
+
+        # Compliant: approved or completed status
+        compliant_pos = pos.filter(status__in=['approved', 'completed'])
+        compliant_count = compliant_pos.count()
+        compliant_spend = compliant_pos.aggregate(total=Sum('total_amount'))['total'] or 0
+
+        # Maverick: draft or rejected (not following proper process)
+        maverick_pos = pos.filter(status__in=['draft', 'rejected'])
+        maverick_count = maverick_pos.count()
+        maverick_spend = maverick_pos.aggregate(total=Sum('total_amount'))['total'] or 0
+
+        compliance_rate = round((compliant_count / total_pos * 100) if total_pos > 0 else 0, 1)
+        maverick_rate = round((maverick_count / total_pos * 100) if total_pos > 0 else 0, 1)
+
+        # Breakdown by status
+        status_breakdown = list(pos.values('status').annotate(
+            count=Count('id'),
+            spend=Sum('total_amount')
+        ))
+
+        return {
+            'report_title': 'Contract Compliance Report',
+            'period': f'{period_start} to {period_end}',
+            'total_orders': total_pos,
+            'total_spend': float(total_spend),
+            'compliant_orders': compliant_count,
+            'compliant_spend': float(compliant_spend),
+            'compliance_rate': compliance_rate,
+            'maverick_orders': maverick_count,
+            'maverick_spend': float(maverick_spend),
+            'maverick_rate': maverick_rate,
+            'status_breakdown': status_breakdown,
+            'total_records': total_pos,
+        }
+
+    def _generate_executive_summary(self, organization, period_start, period_end):
+        """Generate executive summary report data"""
+        from apps.procurement.models import PurchaseOrder, Supplier, RFQ
+        from apps.pricing.models import Material, Price
+
+        # Spend metrics
+        pos = PurchaseOrder.objects.filter(
+            organization=organization,
+            created_at__date__gte=period_start,
+            created_at__date__lte=period_end
+        )
+        total_spend = pos.aggregate(total=Sum('total_amount'))['total'] or 0
+        total_orders = pos.count()
+
+        # Supplier metrics
+        suppliers = Supplier.objects.filter(organization=organization)
+        active_suppliers = suppliers.filter(status='active').count()
+
+        # RFQ metrics
+        rfqs = RFQ.objects.filter(
+            organization=organization,
+            created_at__date__gte=period_start,
+            created_at__date__lte=period_end
+        )
+
+        # Material metrics
+        materials = Material.objects.filter(organization=organization).count()
+
+        # Top suppliers by spend
+        top_suppliers = list(pos.filter(supplier__isnull=False).values(
+            'supplier__name'
+        ).annotate(
+            total=Sum('total_amount')
+        ).order_by('-total')[:5])
+
+        return {
+            'report_title': 'Executive Summary Report',
+            'period': f'{period_start} to {period_end}',
+            'kpis': {
+                'total_spend': float(total_spend),
+                'total_orders': total_orders,
+                'avg_order_value': float(total_spend / total_orders) if total_orders > 0 else 0,
+                'active_suppliers': active_suppliers,
+                'total_suppliers': suppliers.count(),
+                'total_rfqs': rfqs.count(),
+                'total_materials': materials,
+            },
+            'top_suppliers': top_suppliers,
+            'total_records': total_orders,
+        }
+
+
+class ReportDownloadView(OrganizationRequiredMixin, TemplateView):
+    """Download report as CSV file"""
+
+    def get(self, request, pk, *args, **kwargs):
+        import io
+
+        # Get the report
+        try:
+            report = Report.objects.get(
+                pk=pk,
+                organization=get_user_organization(request.user)
+            )
+        except Report.DoesNotExist:
+            return HttpResponse('Report not found', status=404)
+
+        if report.status != 'completed':
+            return HttpResponse('Report is not ready for download', status=400)
+
+        if not report.summary_data:
+            return HttpResponse('Report has no data', status=400)
+
+        # Generate CSV response
+        response = HttpResponse(content_type='text/csv')
+        filename = f"{report.report_type}_{report.created_at.strftime('%Y%m%d')}.csv"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+        writer = csv.writer(response)
+
+        # Write report based on type
+        summary = report.summary_data
+
+        # Header info
+        writer.writerow(['Report', summary.get('report_title', report.name)])
+        writer.writerow(['Period', summary.get('period', '')])
+        writer.writerow(['Generated', report.generated_at.strftime('%Y-%m-%d %H:%M') if report.generated_at else ''])
+        writer.writerow([])  # Empty row
+
+        if report.report_type == 'spend_analysis':
+            self._write_spend_analysis_csv(writer, summary)
+        elif report.report_type == 'supplier_performance':
+            self._write_supplier_performance_csv(writer, summary)
+        elif report.report_type == 'savings_opportunities':
+            self._write_savings_opportunities_csv(writer, summary)
+        elif report.report_type == 'price_trends':
+            self._write_price_trends_csv(writer, summary)
+        elif report.report_type == 'contract_compliance':
+            self._write_contract_compliance_csv(writer, summary)
+        elif report.report_type == 'executive_summary':
+            self._write_executive_summary_csv(writer, summary)
+
+        return response
+
+    def _write_spend_analysis_csv(self, writer, summary):
+        writer.writerow(['Summary'])
+        writer.writerow(['Total Spend', f"${summary.get('total_spend', 0):,.2f}"])
+        writer.writerow(['Total Orders', summary.get('total_orders', 0)])
+        writer.writerow(['Avg Order Value', f"${summary.get('avg_order_value', 0):,.2f}"])
+        writer.writerow([])
+
+        writer.writerow(['Spend by Supplier'])
+        writer.writerow(['Supplier', 'Total Spend', 'Order Count'])
+        for item in summary.get('spend_by_supplier', []):
+            writer.writerow([
+                item.get('supplier__name', 'Unknown'),
+                f"${item.get('total', 0):,.2f}",
+                item.get('order_count', 0)
+            ])
+
+    def _write_supplier_performance_csv(self, writer, summary):
+        writer.writerow(['Summary'])
+        writer.writerow(['Total Suppliers', summary.get('total_suppliers', 0)])
+        writer.writerow(['Active Suppliers', summary.get('active_suppliers', 0)])
+        writer.writerow([])
+
+        writer.writerow(['Supplier Details'])
+        writer.writerow(['Supplier', 'Status', 'Total Spend', 'Orders', 'Quotes', 'Completion Rate'])
+        for item in summary.get('supplier_details', []):
+            writer.writerow([
+                item.get('name', ''),
+                item.get('status', ''),
+                f"${item.get('total_spend', 0):,.2f}",
+                item.get('order_count', 0),
+                item.get('quote_count', 0),
+                f"{item.get('completion_rate', 0)}%"
+            ])
+
+    def _write_savings_opportunities_csv(self, writer, summary):
+        writer.writerow(['Summary'])
+        writer.writerow(['Total Opportunities', summary.get('total_opportunities', 0)])
+        writer.writerow(['Total Potential Savings', f"${summary.get('total_potential_savings', 0):,.2f}"])
+        writer.writerow([])
+
+        writer.writerow(['Opportunities'])
+        writer.writerow(['Material', 'Category', 'Avg Price', 'Min Price', 'Max Price', 'Variance %', 'Potential Savings'])
+        for item in summary.get('opportunities', []):
+            writer.writerow([
+                item.get('material', ''),
+                item.get('category', ''),
+                f"${item.get('avg_price', 0):,.2f}",
+                f"${item.get('min_price', 0):,.2f}",
+                f"${item.get('max_price', 0):,.2f}",
+                f"{item.get('variance_pct', 0)}%",
+                f"${item.get('potential_savings', 0):,.2f}"
+            ])
+
+    def _write_price_trends_csv(self, writer, summary):
+        writer.writerow(['Summary'])
+        writer.writerow(['Materials Analyzed', summary.get('materials_analyzed', 0)])
+        writer.writerow(['Avg Price Change', f"{summary.get('avg_price_change', 0)}%"])
+        writer.writerow([])
+
+        writer.writerow(['Price Trends'])
+        writer.writerow(['Material', 'Category', 'First Price', 'Last Price', 'Avg Price', 'Change %', 'Data Points'])
+        for item in summary.get('trends', []):
+            writer.writerow([
+                item.get('material', ''),
+                item.get('category', ''),
+                f"${item.get('first_price', 0):,.2f}",
+                f"${item.get('last_price', 0):,.2f}",
+                f"${item.get('avg_price', 0):,.2f}",
+                f"{item.get('change_pct', 0)}%",
+                item.get('data_points', 0)
+            ])
+
+    def _write_contract_compliance_csv(self, writer, summary):
+        writer.writerow(['Summary'])
+        writer.writerow(['Total Orders', summary.get('total_orders', 0)])
+        writer.writerow(['Total Spend', f"${summary.get('total_spend', 0):,.2f}"])
+        writer.writerow(['Compliance Rate', f"{summary.get('compliance_rate', 0)}%"])
+        writer.writerow(['Maverick Rate', f"{summary.get('maverick_rate', 0)}%"])
+        writer.writerow([])
+
+        writer.writerow(['Compliant Orders', summary.get('compliant_orders', 0)])
+        writer.writerow(['Compliant Spend', f"${summary.get('compliant_spend', 0):,.2f}"])
+        writer.writerow(['Maverick Orders', summary.get('maverick_orders', 0)])
+        writer.writerow(['Maverick Spend', f"${summary.get('maverick_spend', 0):,.2f}"])
+        writer.writerow([])
+
+        writer.writerow(['Status Breakdown'])
+        writer.writerow(['Status', 'Count', 'Spend'])
+        for item in summary.get('status_breakdown', []):
+            writer.writerow([
+                item.get('status', ''),
+                item.get('count', 0),
+                f"${float(item.get('spend', 0) or 0):,.2f}"
+            ])
+
+    def _write_executive_summary_csv(self, writer, summary):
+        kpis = summary.get('kpis', {})
+
+        writer.writerow(['Key Performance Indicators'])
+        writer.writerow(['Metric', 'Value'])
+        writer.writerow(['Total Spend', f"${kpis.get('total_spend', 0):,.2f}"])
+        writer.writerow(['Total Orders', kpis.get('total_orders', 0)])
+        writer.writerow(['Avg Order Value', f"${kpis.get('avg_order_value', 0):,.2f}"])
+        writer.writerow(['Active Suppliers', kpis.get('active_suppliers', 0)])
+        writer.writerow(['Total Suppliers', kpis.get('total_suppliers', 0)])
+        writer.writerow(['Total RFQs', kpis.get('total_rfqs', 0)])
+        writer.writerow(['Total Materials', kpis.get('total_materials', 0)])
+        writer.writerow([])
+
+        writer.writerow(['Top Suppliers by Spend'])
+        writer.writerow(['Supplier', 'Total Spend'])
+        for item in summary.get('top_suppliers', []):
+            writer.writerow([
+                item.get('supplier__name', 'Unknown'),
+                f"${float(item.get('total', 0) or 0):,.2f}"
+            ])
 
 
 # Data Export Views

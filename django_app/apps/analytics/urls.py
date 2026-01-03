@@ -22,7 +22,8 @@ urlpatterns = [
     
     # Report views
     path('reports/', views.ReportListView.as_view(), name='report_list'),
-    path('reports/<int:pk>/', views.ReportDetailView.as_view(), name='report_detail'),
+    path('reports/<uuid:pk>/', views.ReportDetailView.as_view(), name='report_detail'),
+    path('reports/<uuid:pk>/download/', views.ReportDownloadView.as_view(), name='report_download'),
     path('reports/generate/', views.ReportGenerateView.as_view(), name='report_generate'),
     
     # Data export
