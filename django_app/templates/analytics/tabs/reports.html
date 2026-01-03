@@ -1,32 +1,35 @@
 <!-- Reports Tab Content -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    <!-- Report Templates - Dynamic from database -->
-    {% for template in report_templates %}
-    <div class="report-card p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
-         hx-post="/analytics/reports/generate/"
-         hx-vals='{"report_type": "{{ template.type }}"}'
-         hx-target="#report-generation-status">
-        <div class="text-center">
-            <i class="fas {{ template.icon }} text-4xl text-{{ template.color }}-600 mb-3"></i>
-            <h4 class="font-semibold text-lg mb-2">{{ template.name }}</h4>
-            <p class="text-sm text-gray-600">{{ template.description }}</p>
-            <div class="mt-4">
-                <span class="text-xs text-gray-500">
-                    Last generated:
-                    {% if template.last_generated %}
-                        {{ template.last_generated|timesince }} ago
-                    {% else %}
-                        Never generated
-                    {% endif %}
-                </span>
+<div id="reports-tab-content">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Report Templates - Dynamic from database -->
+        {% for template in report_templates %}
+        <div class="report-card p-4 bg-white border border-gray-200 rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
+             hx-post="/analytics/reports/generate/"
+             hx-vals='{"report_type": "{{ template.type }}"}'
+             hx-target="#reports-generation-status"
+             hx-swap="innerHTML">
+            <div class="text-center">
+                <i class="fas {{ template.icon }} text-4xl text-{{ template.color }}-600 mb-3"></i>
+                <h4 class="font-semibold text-lg mb-2">{{ template.name }}</h4>
+                <p class="text-sm text-gray-600">{{ template.description }}</p>
+                <div class="mt-4">
+                    <span class="text-xs text-gray-500">
+                        Last generated:
+                        {% if template.last_generated %}
+                            {{ template.last_generated|timesince }} ago
+                        {% else %}
+                            Never generated
+                        {% endif %}
+                    </span>
+                </div>
             </div>
         </div>
+        {% endfor %}
     </div>
-    {% endfor %}
-</div>
 
-<!-- Report Generation Status -->
-<div id="report-generation-status" class="mt-6"></div>
+    <!-- Report Generation Status -->
+    <div id="reports-generation-status" class="mt-6"></div>
+</div>
 
 <!-- Recent Reports -->
 <div class="analysis-card mt-6">
