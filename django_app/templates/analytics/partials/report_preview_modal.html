@@ -115,9 +115,14 @@
             </button>
             {% if report.status == 'completed' %}
             <a href="/analytics/reports/{{ report.id }}/download/"
+               class="btn btn-outline"
+               download>
+                <i class="fas fa-file-csv mr-2"></i>Download CSV
+            </a>
+            <a href="/analytics/reports/{{ report.id }}/download/?format=pdf"
                class="btn btn-primary"
                download>
-                <i class="fas fa-download mr-2"></i>Download CSV
+                <i class="fas fa-file-pdf mr-2"></i>Download PDF
             </a>
             {% endif %}
         </div>

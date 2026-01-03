@@ -197,8 +197,8 @@
             
             <div id="scenario-impact" class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg">
                 <p class="text-sm text-gray-600 mb-2">Projected Budget Impact:</p>
-                <p class="text-3xl font-bold text-navy-900">$6,254</p>
-                <p class="text-xs text-gray-600 mt-2">Additional cost based on current patterns</p>
+                <p class="text-3xl font-bold text-navy-900">${{ scenario_impact.total_impact|floatformat:0|default:"0" }}</p>
+                <p class="text-xs text-gray-600 mt-2">Based on current monthly spend of ${{ scenario_impact.current_spend|floatformat:0|default:"0" }}</p>
             </div>
             
             <button class="w-full btn btn-outline btn-sm"
@@ -216,46 +216,28 @@
         <i class="fas fa-robot text-blue-600 mr-2"></i>
         AI-Powered Recommendations
     </h3>
-    
+
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div class="p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
+        {% for rec in ai_recommendations %}
+        <div class="p-4 bg-{{ rec.color }}-50 border-l-4 border-{{ rec.color }}-500 rounded">
             <div class="flex items-start">
-                <i class="fas fa-lock text-blue-600 mr-3 mt-1"></i>
+                <i class="fas {{ rec.icon }} text-{{ rec.color }}-600 mr-3 mt-1"></i>
                 <div>
-                    <p class="font-medium text-gray-900">Lock Steel Prices</p>
-                    <p class="text-sm text-gray-600 mt-1">15% increase predicted in Q4</p>
-                    <button class="text-xs text-blue-600 hover:text-blue-700 mt-2">
-                        Create Contract →
-                    </button>
+                    <p class="font-medium text-gray-900">{{ rec.title }}</p>
+                    <p class="text-sm text-gray-600 mt-1">{{ rec.description }}</p>
+                    <a href="{{ rec.action_url }}" class="text-xs text-{{ rec.color }}-600 hover:text-{{ rec.color }}-700 mt-2 inline-block">
+                        {{ rec.action }} →
+                    </a>
                 </div>
             </div>
         </div>
-        
-        <div class="p-4 bg-green-50 border-l-4 border-green-500 rounded">
-            <div class="flex items-start">
-                <i class="fas fa-shopping-cart text-green-600 mr-3 mt-1"></i>
-                <div>
-                    <p class="font-medium text-gray-900">Reorder Electronics</p>
-                    <p class="text-sm text-gray-600 mt-1">Optimal reorder point in 5 days</p>
-                    <button class="text-xs text-green-600 hover:text-green-700 mt-2">
-                        Create RFQ →
-                    </button>
-                </div>
-            </div>
+        {% empty %}
+        <div class="col-span-3 text-center py-6 text-gray-500">
+            <i class="fas fa-robot text-3xl mb-2"></i>
+            <p>Analyzing data to generate recommendations...</p>
+            <p class="text-sm mt-1">Add more data to enable AI insights</p>
         </div>
-        
-        <div class="p-4 bg-orange-50 border-l-4 border-orange-500 rounded">
-            <div class="flex items-start">
-                <i class="fas fa-exclamation text-orange-600 mr-3 mt-1"></i>
-                <div>
-                    <p class="font-medium text-gray-900">Review Copper Supplier</p>
-                    <p class="text-sm text-gray-600 mt-1">Prices 18% above market</p>
-                    <button class="text-xs text-orange-600 hover:text-orange-700 mt-2">
-                        Analyze →
-                    </button>
-                </div>
-            </div>
-        </div>
+        {% endfor %}
     </div>
 </div>
 

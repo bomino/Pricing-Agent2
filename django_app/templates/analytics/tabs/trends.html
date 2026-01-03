@@ -145,18 +145,17 @@
             <h4 class="font-semibold text-gray-900">Positive Trends</h4>
         </div>
         <ul class="space-y-2 text-sm">
+            {% for trend in positive_trends %}
             <li class="flex items-start">
                 <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
-                <span class="text-gray-700">15% reduction in maverick spend</span>
+                <span class="text-gray-700">{{ trend }}</span>
             </li>
+            {% empty %}
             <li class="flex items-start">
-                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
-                <span class="text-gray-700">Contract compliance up by 8%</span>
+                <i class="fas fa-info-circle text-gray-400 mr-2 mt-0.5"></i>
+                <span class="text-gray-500">No significant trends identified</span>
             </li>
-            <li class="flex items-start">
-                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
-                <span class="text-gray-700">Supplier consolidation improving</span>
-            </li>
+            {% endfor %}
         </ul>
     </div>
 
@@ -167,18 +166,17 @@
             <h4 class="font-semibold text-gray-900">Areas of Concern</h4>
         </div>
         <ul class="space-y-2 text-sm">
+            {% for concern in areas_of_concern %}
             <li class="flex items-start">
                 <i class="fas fa-times-circle text-orange-500 mr-2 mt-0.5"></i>
-                <span class="text-gray-700">Steel prices increased 18%</span>
+                <span class="text-gray-700">{{ concern }}</span>
             </li>
+            {% empty %}
             <li class="flex items-start">
-                <i class="fas fa-times-circle text-orange-500 mr-2 mt-0.5"></i>
-                <span class="text-gray-700">Lead times extending for electronics</span>
+                <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5"></i>
+                <span class="text-gray-500">No concerns at this time</span>
             </li>
-            <li class="flex items-start">
-                <i class="fas fa-times-circle text-orange-500 mr-2 mt-0.5"></i>
-                <span class="text-gray-700">Supplier diversity below target</span>
-            </li>
+            {% endfor %}
         </ul>
     </div>
 
@@ -189,18 +187,17 @@
             <h4 class="font-semibold text-gray-900">Recommendations</h4>
         </div>
         <ul class="space-y-2 text-sm">
+            {% for rec in recommendations %}
             <li class="flex items-start">
                 <i class="fas fa-arrow-right text-blue-500 mr-2 mt-0.5"></i>
-                <span class="text-gray-700">Lock in Q4 pricing for volatile materials</span>
+                <span class="text-gray-700">{{ rec }}</span>
             </li>
+            {% empty %}
             <li class="flex items-start">
-                <i class="fas fa-arrow-right text-blue-500 mr-2 mt-0.5"></i>
-                <span class="text-gray-700">Consolidate tail spend suppliers</span>
+                <i class="fas fa-info-circle text-gray-400 mr-2 mt-0.5"></i>
+                <span class="text-gray-500">Continue current practices</span>
             </li>
-            <li class="flex items-start">
-                <i class="fas fa-arrow-right text-blue-500 mr-2 mt-0.5"></i>
-                <span class="text-gray-700">Negotiate volume discounts</span>
-            </li>
+            {% endfor %}
         </ul>
     </div>
 </div>
