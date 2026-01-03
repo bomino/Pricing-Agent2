@@ -737,7 +737,7 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
                         potential_savings = float(stats['max'] - stats['min'])
                         opportunities.append({
                             'material': material.name,
-                            'category': material.category or 'Uncategorized',
+                            'category': str(material.category) if material.category else 'Uncategorized',
                             'avg_price': float(stats['avg']),
                             'min_price': float(stats['min']),
                             'max_price': float(stats['max']),
@@ -788,7 +788,7 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
 
                 trends.append({
                     'material': material.name,
-                    'category': material.category or 'Uncategorized',
+                    'category': str(material.category) if material.category else 'Uncategorized',
                     'first_price': float(first_price),
                     'last_price': float(last_price),
                     'avg_price': float(avg_price) if avg_price else 0,
