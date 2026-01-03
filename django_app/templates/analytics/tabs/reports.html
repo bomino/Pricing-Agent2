@@ -88,10 +88,11 @@
                         hx-target="#modal-container">
                     <i class="fas fa-eye"></i> View
                 </button>
-                <button class="btn btn-sm btn-outline"
-                        hx-get="/analytics/reports/{{ report.id }}/download/">
+                <a href="/analytics/reports/{{ report.id }}/download/"
+                   class="btn btn-sm btn-outline"
+                   download>
                     <i class="fas fa-download"></i> Download
-                </button>
+                </a>
                 <div class="relative">
                     <button class="btn btn-sm btn-outline"
                             onclick="toggleDropdown('report-actions-{{ report.id }}')">

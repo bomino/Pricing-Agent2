@@ -503,22 +503,45 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
             report.generated_at = timezone.now()
             report.save()
 
-            return JsonResponse({
-                'status': 'success',
-                'report_id': str(report.id),
-                'message': f'Report generated successfully with {report.total_records} records'
-            })
+            # Return HTML for HTMX to display
+            html = f'''
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle text-green-600 text-xl mr-3"></i>
+                        <div>
+                            <p class="font-medium text-green-800">{report.name} generated successfully</p>
+                            <p class="text-sm text-green-600">{report.total_records} records processed</p>
+                        </div>
+                    </div>
+                    <a href="/analytics/reports/{report.id}/download/"
+                       class="btn btn-sm bg-green-600 text-white hover:bg-green-700"
+                       download>
+                        <i class="fas fa-download mr-1"></i> Download CSV
+                    </a>
+                </div>
+            </div>
+            '''
+            return HttpResponse(html)
 
         except Exception as e:
             report.status = 'failed'
             report.summary_data = {'error': str(e)}
             report.save()
 
-            return JsonResponse({
-                'status': 'error',
-                'report_id': str(report.id),
-                'message': f'Report generation failed: {str(e)}'
-            }, status=500)
+            # Return error HTML for HTMX
+            html = f'''
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-circle text-red-600 text-xl mr-3"></i>
+                    <div>
+                        <p class="font-medium text-red-800">Report generation failed</p>
+                        <p class="text-sm text-red-600">{str(e)}</p>
+                    </div>
+                </div>
+            </div>
+            '''
+            return HttpResponse(html, status=500)
 
     def _generate_report_data(self, report_type, organization, period_start, period_end):
         """Generate report data based on report type"""
