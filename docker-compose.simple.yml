@@ -54,6 +54,7 @@ services:
       CELERY_BROKER_URL: 'redis://redis:6379/0'
       CELERY_RESULT_BACKEND: 'redis://redis:6379/0'
       ALLOWED_HOSTS: '*'
+      ML_SERVICE_URL: 'http://fastapi:8001'
     volumes:
       - ./django_app:/app/django_app
       - ./static:/app/static
@@ -86,6 +87,40 @@ services:
       - "8025:8025"
     networks:
       - pricing_network
+
+  # FastAPI ML Service
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: pricing_fastapi
+    environment:
+      DEBUG: 'True'
+      DATABASE_URL: 'postgres://pricing_user:pricing_password@postgres:5432/pricing_agent'
+      DB_NAME: 'pricing_agent'
+      DB_USER: 'pricing_user'
+      DB_PASSWORD: 'pricing_password'
+      DB_HOST: 'postgres'
+      DB_PORT: '5432'
+      REDIS_URL: 'redis://redis:6379/0'
+      MLFLOW_TRACKING_URI: '/app/mlruns'
+    volumes:
+      - ./fastapi_ml:/app/fastapi_ml
+      - ./mlruns:/app/mlruns
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pricing_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Celery Worker (optional - comment out if not needed immediately)
   celery:

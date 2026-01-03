@@ -39,4 +39,7 @@ CACHES = {
 # Disable Celery for local testing
 CELERY_TASK_ALWAYS_EAGER = True
 
+# Disable ML anomaly detection during local testing (no ML service running)
+ML_ANOMALY_DETECTION_ENABLED = False
+
 print("Using LOCAL settings with SQLite database")

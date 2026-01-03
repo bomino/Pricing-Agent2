@@ -500,3 +500,305 @@ class QuoteModelTests(ProcurementTestCase):
         expected_unit_price = Decimal('10.00')
         item = quote.items.first()
         self.assertEqual(item.unit_price, expected_unit_price)
+
+
+# =============================================================================
+# Phase 3: Negotiation Recommendations Engine Tests
+# =============================================================================
+
+from unittest.mock import Mock, patch, MagicMock
+
+
+class NegotiationRecommendationEngineTests(ProcurementTestCase):
+    """Tests for NegotiationRecommendationEngine."""
+
+    def test_engine_initialization(self):
+        """Test engine initializes correctly."""
+        from apps.procurement.recommendations import NegotiationRecommendationEngine
+
+        engine = NegotiationRecommendationEngine(self.organization)
+        self.assertEqual(engine.organization, self.organization)
+        self.assertIsNone(engine._ml_client)
+
+    def test_engine_lazy_loads_ml_client(self):
+        """Test ML client is lazy loaded."""
+        from apps.procurement.recommendations import NegotiationRecommendationEngine
+
+        engine = NegotiationRecommendationEngine(self.organization)
+
+        # Patch where get_ml_client is imported (inside the method)
+        with patch('apps.pricing.ml_client.get_ml_client') as mock_get:
+            mock_client = Mock()
+            mock_get.return_value = mock_client
+
+            # Access ml_client property
+            client = engine.ml_client
+
+            mock_get.assert_called_once()
+            self.assertEqual(client, mock_client)
+
+    def test_get_rfq_recommendations_not_found(self):
+        """Test engine handles missing RFQ gracefully."""
+        from apps.procurement.recommendations import NegotiationRecommendationEngine
+
+        engine = NegotiationRecommendationEngine(self.organization)
+        fake_uuid = str(uuid.uuid4())
+
+        recommendations = engine.get_rfq_recommendations(fake_uuid)
+
+        self.assertEqual(recommendations, [])
+
+    @patch('apps.procurement.recommendations.NegotiationRecommendationEngine._get_historical_prices')
+    @patch('apps.procurement.recommendations.NegotiationRecommendationEngine._get_price_prediction')
+    @patch('apps.procurement.recommendations.NegotiationRecommendationEngine._get_should_cost')
+    def test_get_rfq_recommendations_with_data(
+        self,
+        mock_should_cost,
+        mock_prediction,
+        mock_historical
+    ):
+        """Test RFQ recommendations with available data."""
+        from apps.procurement.recommendations import NegotiationRecommendationEngine
+
+        # Setup mocks
+        mock_historical.return_value = {
+            'avg_price': Decimal('85.00'),
+            'min_price': Decimal('80.00'),
+            'max_price': Decimal('95.00'),
+            'count': 10
+        }
+        mock_prediction.return_value = {
+            'predicted_price': Decimal('87.00'),
+            'confidence': 0.85,
+            'model_version': 'v1.0'
+        }
+        mock_should_cost.return_value = {
+            'total': Decimal('82.00'),
+            'material_cost': Decimal('50.00'),
+            'labor_cost': Decimal('20.00'),
+            'overhead_cost': Decimal('12.00'),
+            'confidence': 0.80
+        }
+
+        engine = NegotiationRecommendationEngine(self.organization)
+        recommendations = engine.get_rfq_recommendations(str(self.rfq.id))
+
+        self.assertGreater(len(recommendations), 0)
+
+        rec = recommendations[0]
+        self.assertEqual(rec.material_name, self.material.name)
+        self.assertIsNotNone(rec.target_price)
+        self.assertIn('historical_prices', rec.data_sources)
+
+    def test_get_rfq_recommendations_single_item(self):
+        """Test engine handles RFQ with single item correctly."""
+        from apps.procurement.recommendations import NegotiationRecommendationEngine
+
+        # RFQ already has one item from setup
+        engine = NegotiationRecommendationEngine(self.organization)
+        recommendations = engine.get_rfq_recommendations(str(self.rfq.id))
+
+        # Should have at least one recommendation for item with material
+        material_item_recs = [r for r in recommendations if r.material_name == self.material.name]
+        self.assertGreaterEqual(len(material_item_recs), 1)
+
+    @patch('apps.procurement.recommendations.NegotiationRecommendationEngine._get_historical_prices')
+    def test_determine_action_high_variance(self, mock_historical):
+        """Test action determination for high variance items."""
+        from apps.procurement.recommendations import NegotiationRecommendationEngine
+
+        mock_historical.return_value = {
+            'avg_price': Decimal('70.00'),
+            'min_price': Decimal('65.00'),
+            'max_price': Decimal('75.00'),
+            'count': 5
+        }
+
+        engine = NegotiationRecommendationEngine(self.organization)
+        recommendations = engine.get_rfq_recommendations(str(self.rfq.id))
+
+        # Budget estimate is $90, avg historical is $70 - that's >20% variance
+        rec = recommendations[0]
+        self.assertEqual(rec.action, 'negotiate_lower')
+        self.assertEqual(rec.priority, 'high')
+
+
+class NegotiationRecommendationDataclassTests(TestCase):
+    """Tests for NegotiationRecommendation dataclass."""
+
+    def test_recommendation_creation(self):
+        """Test creating a recommendation object."""
+        from apps.procurement.recommendations import NegotiationRecommendation
+
+        rec = NegotiationRecommendation(
+            item_id='uuid-123',
+            material_name='Steel Plate',
+            action='negotiate_lower',
+            target_price=Decimal('85.00'),
+            current_price=Decimal('100.00'),
+            savings_potential=Decimal('15.00'),
+            savings_percentage=15.0,
+            confidence=0.85,
+            priority='high',
+            reasoning='Quote is 15% above target price',
+            data_sources=['historical_prices', 'should_cost_model']
+        )
+
+        self.assertEqual(rec.material_name, 'Steel Plate')
+        self.assertEqual(rec.action, 'negotiate_lower')
+        self.assertEqual(rec.savings_potential, Decimal('15.00'))
+        self.assertEqual(rec.savings_percentage, 15.0)
+
+
+class ConvenienceFunctionTests(ProcurementTestCase):
+    """Tests for convenience functions."""
+
+    @patch('apps.procurement.recommendations.NegotiationRecommendationEngine.get_rfq_recommendations')
+    def test_get_recommendations_for_rfq(self, mock_get_recs):
+        """Test get_recommendations_for_rfq convenience function."""
+        from apps.procurement.recommendations import (
+            get_recommendations_for_rfq,
+            NegotiationRecommendation
+        )
+
+        mock_get_recs.return_value = [
+            NegotiationRecommendation(
+                item_id='uuid-123',
+                material_name='Test Material',
+                action='negotiate_lower',
+                target_price=Decimal('90.00'),
+                current_price=Decimal('100.00'),
+                savings_potential=Decimal('10.00'),
+                savings_percentage=10.0,
+                confidence=0.8,
+                priority='medium',
+                reasoning='Slight room for negotiation',
+                data_sources=['historical_prices']
+            )
+        ]
+
+        results = get_recommendations_for_rfq(str(self.rfq.id), self.organization)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['material_name'], 'Test Material')
+        self.assertEqual(results[0]['action'], 'negotiate_lower')
+        self.assertEqual(results[0]['target_price'], 90.0)
+        self.assertEqual(results[0]['savings_potential'], 10.0)
+
+    @patch('apps.procurement.recommendations.NegotiationRecommendationEngine.get_quote_recommendations')
+    def test_get_recommendations_for_quote(self, mock_get_recs):
+        """Test get_recommendations_for_quote convenience function."""
+        from apps.procurement.recommendations import (
+            get_recommendations_for_quote,
+            NegotiationRecommendation
+        )
+
+        # Create a quote first
+        quote = Quote.objects.create(
+            rfq=self.rfq,
+            supplier=self.supplier,
+            organization=self.organization,
+            quote_number='QUO-REC-TEST',
+            status='submitted',
+            total_amount=Decimal('10000.00'),
+            currency='USD',
+            validity_period=30
+        )
+
+        mock_get_recs.return_value = [
+            NegotiationRecommendation(
+                item_id='uuid-456',
+                material_name='Test Material',
+                action='accept_with_terms',
+                target_price=Decimal('95.00'),
+                current_price=Decimal('100.00'),
+                savings_potential=Decimal('5.00'),
+                savings_percentage=5.0,
+                confidence=0.75,
+                priority='low',
+                reasoning='Quote slightly above target',
+                data_sources=['ml_prediction']
+            )
+        ]
+
+        results = get_recommendations_for_quote(str(quote.id), self.organization)
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['action'], 'accept_with_terms')
+        self.assertEqual(results[0]['priority'], 'low')
+
+
+class DetermineActionTests(ProcurementTestCase):
+    """Tests for action determination logic."""
+
+    def test_determine_action_gather_data(self):
+        """Test action when no target price available."""
+        from apps.procurement.recommendations import NegotiationRecommendationEngine
+
+        engine = NegotiationRecommendationEngine(self.organization)
+
+        action, priority, reasoning = engine._determine_action(
+            budget_estimate=Decimal('100.00'),
+            target_price=None,
+            historical_data=None,
+            predicted_price=None,
+            should_cost=None
+        )
+
+        self.assertEqual(action, 'gather_data')
+        self.assertEqual(priority, 'medium')
+
+    def test_determine_action_accept(self):
+        """Test action when budget is at or below target."""
+        from apps.procurement.recommendations import NegotiationRecommendationEngine
+
+        engine = NegotiationRecommendationEngine(self.organization)
+
+        action, priority, reasoning = engine._determine_action(
+            budget_estimate=Decimal('80.00'),
+            target_price=Decimal('85.00'),
+            historical_data={'avg_price': Decimal('85.00')},
+            predicted_price=None,
+            should_cost=None
+        )
+
+        self.assertEqual(action, 'accept')
+        self.assertEqual(priority, 'low')
+
+    def test_determine_quote_action_verify_quality(self):
+        """Test quote action when price is below historical minimum."""
+        from apps.procurement.recommendations import NegotiationRecommendationEngine
+
+        engine = NegotiationRecommendationEngine(self.organization)
+
+        action, priority, reasoning = engine._determine_quote_action(
+            quoted_price=Decimal('60.00'),
+            target_price=Decimal('80.00'),
+            historical_data={
+                'avg_price': Decimal('85.00'),
+                'min_price': Decimal('70.00'),
+                'max_price': Decimal('100.00')
+            },
+            should_cost=None
+        )
+
+        self.assertEqual(action, 'verify_quality')
+        self.assertEqual(priority, 'high')
+
+    def test_determine_quote_action_negotiate_high_variance(self):
+        """Test quote action when quote is significantly above target."""
+        from apps.procurement.recommendations import NegotiationRecommendationEngine
+
+        engine = NegotiationRecommendationEngine(self.organization)
+
+        action, priority, reasoning = engine._determine_quote_action(
+            quoted_price=Decimal('130.00'),
+            target_price=Decimal('100.00'),
+            historical_data=None,
+            should_cost=None
+        )
+
+        self.assertEqual(action, 'negotiate_lower')
+        self.assertEqual(priority, 'high')
+        # Variance is (130-100)/130 = 23.1%, so check for "23" or "above target"
+        self.assertIn('above target', reasoning)

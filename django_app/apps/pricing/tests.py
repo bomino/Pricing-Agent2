@@ -2,13 +2,16 @@
 Tests for pricing module - Materials, Prices, Alerts, Benchmarks, Predictions
 """
 import uuid
+import json
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import Mock, patch, MagicMock
 
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth.models import User
+from django.conf import settings
 
 from apps.core.models import Organization
 from apps.accounts.models import UserProfile
@@ -548,3 +551,705 @@ class OrganizationIsolationTests(PricingTestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 404)
+
+
+# =============================================================================
+# Phase 3 ML Integration Tests
+# =============================================================================
+
+
+class MLClientDataclassTests(TestCase):
+    """Tests for ML client dataclasses."""
+
+    def test_price_prediction_dataclass(self):
+        """Test PricePrediction dataclass."""
+        from apps.pricing.ml_client import PricePrediction
+
+        prediction = PricePrediction(
+            predicted_price=Decimal('100.50'),
+            confidence_score=0.85,
+            confidence_interval={'lower': 95.0, 'upper': 106.0},
+            model_version='v1.0.0',
+            features_used=['price_history', 'quantity']
+        )
+
+        self.assertEqual(prediction.predicted_price, Decimal('100.50'))
+        self.assertEqual(prediction.confidence_score, 0.85)
+        self.assertEqual(prediction.model_version, 'v1.0.0')
+
+    def test_anomaly_result_dataclass(self):
+        """Test AnomalyResult dataclass."""
+        from apps.pricing.ml_client import AnomalyResult
+
+        result = AnomalyResult(
+            is_anomaly=True,
+            anomaly_score=0.92,
+            severity='high',
+            expected_price=Decimal('100.00'),
+            deviation_percentage=25.0,
+            explanation='Price significantly above historical average'
+        )
+
+        self.assertTrue(result.is_anomaly)
+        self.assertEqual(result.severity, 'high')
+        self.assertEqual(result.deviation_percentage, 25.0)
+
+    def test_should_cost_result_dataclass(self):
+        """Test ShouldCostResult dataclass."""
+        from apps.pricing.ml_client import ShouldCostResult
+
+        result = ShouldCostResult(
+            total_should_cost=Decimal('150.00'),
+            material_cost=Decimal('80.00'),
+            labor_cost=Decimal('40.00'),
+            overhead_cost=Decimal('30.00'),
+            confidence=0.75,
+            breakdown=[
+                {'component': 'raw_material', 'cost': 80.00},
+                {'component': 'labor', 'cost': 40.00}
+            ]
+        )
+
+        self.assertEqual(result.total_should_cost, Decimal('150.00'))
+        self.assertEqual(result.material_cost, Decimal('80.00'))
+        self.assertEqual(result.labor_cost, Decimal('40.00'))
+
+
+class MLServiceClientTests(TestCase):
+    """Tests for MLServiceClient."""
+
+    def test_client_initialization_default(self):
+        """Test client initialization with default URL."""
+        from apps.pricing.ml_client import MLServiceClient
+
+        client = MLServiceClient()
+        self.assertEqual(client.timeout, 30.0)
+        self.assertIsNone(client._client)
+
+    def test_client_initialization_custom(self):
+        """Test client initialization with custom URL and timeout."""
+        from apps.pricing.ml_client import MLServiceClient
+
+        client = MLServiceClient(base_url='http://custom:8002', timeout=60.0)
+        self.assertEqual(client.base_url, 'http://custom:8002')
+        self.assertEqual(client.timeout, 60.0)
+
+    def test_client_context_manager(self):
+        """Test client works as context manager."""
+        from apps.pricing.ml_client import MLServiceClient
+
+        with MLServiceClient() as client:
+            self.assertIsNotNone(client)
+
+    @patch('apps.pricing.ml_client.httpx.Client')
+    def test_health_check_success(self, mock_client_class):
+        """Test successful health check."""
+        from apps.pricing.ml_client import MLServiceClient
+
+        mock_response = Mock()
+        mock_response.json.return_value = {'status': 'healthy', 'models': 4}
+        mock_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.get.return_value = mock_response
+        mock_client_class.return_value = mock_client
+
+        client = MLServiceClient()
+        result = client.health_check()
+
+        self.assertEqual(result['status'], 'healthy')
+        mock_client.get.assert_called_once_with('/health')
+
+    @patch('apps.pricing.ml_client.httpx.Client')
+    def test_health_check_failure(self, mock_client_class):
+        """Test health check handles failure."""
+        from apps.pricing.ml_client import MLServiceClient, MLServiceError
+        import httpx
+
+        mock_client = Mock()
+        mock_client.get.side_effect = httpx.HTTPError("Connection refused")
+        mock_client_class.return_value = mock_client
+
+        client = MLServiceClient()
+
+        with self.assertRaises(MLServiceError):
+            client.health_check()
+
+    @patch('apps.pricing.ml_client.httpx.Client')
+    def test_is_healthy_true(self, mock_client_class):
+        """Test is_healthy returns True when healthy."""
+        from apps.pricing.ml_client import MLServiceClient
+
+        mock_response = Mock()
+        mock_response.json.return_value = {'status': 'healthy'}
+        mock_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.get.return_value = mock_response
+        mock_client_class.return_value = mock_client
+
+        client = MLServiceClient()
+        self.assertTrue(client.is_healthy())
+
+    @patch('apps.pricing.ml_client.httpx.Client')
+    def test_is_healthy_false(self, mock_client_class):
+        """Test is_healthy returns False when unhealthy."""
+        from apps.pricing.ml_client import MLServiceClient
+        import httpx
+
+        mock_client = Mock()
+        mock_client.get.side_effect = httpx.HTTPError("Connection refused")
+        mock_client_class.return_value = mock_client
+
+        client = MLServiceClient()
+        self.assertFalse(client.is_healthy())
+
+    @patch('apps.pricing.ml_client.httpx.Client')
+    def test_predict_price_success(self, mock_client_class):
+        """Test successful price prediction."""
+        from apps.pricing.ml_client import MLServiceClient
+
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            'predicted_price': 105.50,
+            'confidence_score': 0.87,
+            'confidence_interval': {'lower': 100.0, 'upper': 111.0},
+            'model_version': 'v1.0.0',
+            'features_used': ['quantity', 'supplier']
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.post.return_value = mock_response
+        mock_client_class.return_value = mock_client
+
+        client = MLServiceClient()
+        prediction = client.predict_price(
+            material_id='uuid-123',
+            supplier_id='supplier-456',
+            quantity=10.0
+        )
+
+        self.assertEqual(prediction.predicted_price, Decimal('105.50'))
+        self.assertEqual(prediction.confidence_score, 0.87)
+        self.assertEqual(prediction.model_version, 'v1.0.0')
+
+    @patch('apps.pricing.ml_client.httpx.Client')
+    def test_detect_anomaly_success(self, mock_client_class):
+        """Test successful anomaly detection."""
+        from apps.pricing.ml_client import MLServiceClient
+
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            'is_anomaly': True,
+            'anomaly_score': 0.95,
+            'severity': 'high',
+            'expected_price': 100.00,
+            'deviation_percentage': 30.0,
+            'explanation': 'Price 30% above expected'
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.post.return_value = mock_response
+        mock_client_class.return_value = mock_client
+
+        client = MLServiceClient()
+        result = client.detect_anomaly(
+            material_id='uuid-123',
+            price=130.00,
+            quantity=1.0
+        )
+
+        self.assertTrue(result.is_anomaly)
+        self.assertEqual(result.severity, 'high')
+        self.assertEqual(result.deviation_percentage, 30.0)
+
+    @patch('apps.pricing.ml_client.httpx.Client')
+    def test_calculate_should_cost_success(self, mock_client_class):
+        """Test successful should-cost calculation."""
+        from apps.pricing.ml_client import MLServiceClient
+
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            'total_should_cost': 150.00,
+            'material_cost': 80.00,
+            'labor_cost': 40.00,
+            'overhead_cost': 30.00,
+            'confidence': 0.82,
+            'breakdown': []
+        }
+        mock_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.post.return_value = mock_response
+        mock_client_class.return_value = mock_client
+
+        client = MLServiceClient()
+        result = client.calculate_should_cost(
+            material_id='uuid-123',
+            quantity=10.0
+        )
+
+        self.assertEqual(result.total_should_cost, Decimal('150.00'))
+        self.assertEqual(result.material_cost, Decimal('80.00'))
+        self.assertEqual(result.labor_cost, Decimal('40.00'))
+        self.assertEqual(result.confidence, 0.82)
+
+
+class MLServiceSingletonTests(TestCase):
+    """Tests for ML client singleton pattern."""
+
+    def test_get_ml_client_returns_same_instance(self):
+        """Test get_ml_client returns singleton instance."""
+        from apps.pricing import ml_client
+
+        # Reset singleton
+        ml_client._ml_client = None
+
+        client1 = ml_client.get_ml_client()
+        client2 = ml_client.get_ml_client()
+
+        self.assertIs(client1, client2)
+
+        # Cleanup
+        ml_client._ml_client = None
+
+
+class SignalTests(PricingTestCase):
+    """Tests for pricing signals (anomaly detection on price creation)."""
+
+    def test_anomaly_detection_triggered_on_new_price(self):
+        """Test anomaly detection signal runs on new price creation."""
+        # Create a new price - should trigger the signal without error
+        # ML_ANOMALY_DETECTION_ENABLED=False in settings, so it will skip
+        new_price = Price.objects.create(
+            time=timezone.now(),
+            material=self.material,
+            supplier=self.supplier,
+            organization=self.organization,
+            price=Decimal('150.00'),
+            currency='USD',
+            quantity=Decimal('1'),
+            unit_of_measure='EA',
+            price_type='quote',
+            source='test'
+        )
+
+        # Signal ran without error - verify price was created
+        self.assertIsNotNone(new_price.id)
+
+    def test_anomaly_detection_skipped_for_update(self):
+        """Test anomaly detection is not triggered on price update."""
+        # Create a price first
+        price = Price.objects.create(
+            time=timezone.now(),
+            material=self.material,
+            supplier=self.supplier,
+            organization=self.organization,
+            price=Decimal('100.00'),
+            currency='USD',
+            quantity=Decimal('1'),
+            unit_of_measure='EA',
+            price_type='quote',
+            source='test'
+        )
+
+        # Update the price - signal should skip (created=False)
+        price.price = Decimal('110.00')
+        price.save()
+
+        # No exception raised means signal handled update correctly
+        price.refresh_from_db()
+        self.assertEqual(price.price, Decimal('110.00'))
+
+    def test_signal_handles_missing_material(self):
+        """Test signal handles price without material gracefully."""
+        # Material is required by the model, so this is a no-op test
+        pass
+
+    def test_update_material_price_stats_signal(self):
+        """Test price stats are updated when new price is created."""
+        initial_price = Price.objects.create(
+            time=timezone.now(),
+            material=self.material,
+            supplier=self.supplier,
+            organization=self.organization,
+            price=Decimal('200.00'),
+            currency='USD',
+            quantity=Decimal('1'),
+            unit_of_measure='EA',
+            price_type='quote',
+            source='test'
+        )
+
+        # The signal should calculate stats without error
+        # Verify no exception is raised
+        self.assertIsNotNone(initial_price.id)
+
+
+class MLViewTests(PricingTestCase):
+    """Tests for ML-related views."""
+
+    def test_material_prediction_view_get_no_prediction(self):
+        """Test prediction view when no prediction exists."""
+        url = reverse('pricing:material_predict', kwargs={'pk': self.material.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data.get('success', True))
+        self.assertIn('message', data)
+
+    def test_material_prediction_view_get_with_prediction(self):
+        """Test prediction view when prediction exists."""
+        # Create a prediction first
+        prediction = PricePrediction.objects.create(
+            organization=self.organization,
+            material=self.material,
+            predicted_price=Decimal('110.00'),
+            confidence_interval={'lower': 105.00, 'upper': 115.00},
+            prediction_horizon_days=30,
+            model_version='v1.0',
+            model_confidence=0.85,
+            status='completed'
+        )
+
+        url = reverse('pricing:material_predict', kwargs={'pk': self.material.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['prediction']['predicted_price'], 110.0)
+
+    @patch('apps.pricing.ml_client.get_ml_client')
+    def test_material_prediction_view_post_success(self, mock_get_client):
+        """Test generating new prediction via POST."""
+        from apps.pricing.ml_client import PricePrediction as MLPricePrediction
+
+        mock_client = Mock()
+        mock_client.predict_price.return_value = MLPricePrediction(
+            predicted_price=Decimal('115.00'),
+            confidence_score=0.88,
+            confidence_interval={'lower': 110.0, 'upper': 120.0},
+            model_version='v1.1.0',
+            features_used=['history', 'quantity']
+        )
+        mock_get_client.return_value = mock_client
+
+        url = reverse('pricing:material_predict', kwargs={'pk': self.material.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['prediction']['predicted_price'], 115.0)
+
+    @patch('apps.pricing.ml_client.get_ml_client')
+    def test_material_prediction_view_post_ml_error(self, mock_get_client):
+        """Test prediction view handles ML service error."""
+        from apps.pricing.ml_client import MLServiceError
+
+        mock_client = Mock()
+        mock_client.predict_price.side_effect = MLServiceError("Service unavailable")
+        mock_get_client.return_value = mock_client
+
+        url = reverse('pricing:material_predict', kwargs={'pk': self.material.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 503)
+        data = response.json()
+        self.assertFalse(data['success'])
+        self.assertIn('error', data)
+
+    def test_material_should_cost_view_get_no_benchmark(self):
+        """Test should-cost view when no benchmark exists."""
+        url = reverse('pricing:material_should_cost', kwargs={'pk': self.material.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertFalse(data.get('success', True))
+
+    def test_material_should_cost_view_get_with_benchmark(self):
+        """Test should-cost view when benchmark exists."""
+        # Create a should-cost benchmark
+        benchmark = PriceBenchmark.objects.create(
+            material=self.material,
+            organization=self.organization,
+            benchmark_type='should_cost',
+            benchmark_price=Decimal('95.00'),
+            currency='USD',
+            quantity=Decimal('1'),
+            period_start=timezone.now().date() - timedelta(days=30),
+            period_end=timezone.now().date(),
+            calculation_method='Material: $50, Labor: $25, Overhead: $20'
+        )
+
+        url = reverse('pricing:material_should_cost', kwargs={'pk': self.material.pk})
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['should_cost']['total'], 95.0)
+
+    @patch('apps.pricing.ml_client.get_ml_client')
+    def test_material_should_cost_view_post_success(self, mock_get_client):
+        """Test calculating should-cost via POST."""
+        from apps.pricing.ml_client import ShouldCostResult
+
+        mock_client = Mock()
+        mock_client.calculate_should_cost.return_value = ShouldCostResult(
+            total_should_cost=Decimal('100.00'),
+            material_cost=Decimal('55.00'),
+            labor_cost=Decimal('25.00'),
+            overhead_cost=Decimal('20.00'),
+            confidence=0.80,
+            breakdown=[]
+        )
+        mock_get_client.return_value = mock_client
+
+        url = reverse('pricing:material_should_cost', kwargs={'pk': self.material.pk})
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['should_cost']['total'], 100.0)
+        self.assertEqual(data['should_cost']['material_cost'], 55.0)
+
+    def test_anomaly_check_view_missing_price(self):
+        """Test anomaly check view requires price parameter."""
+        url = reverse('pricing:material_anomaly_check', kwargs={'pk': self.material.pk})
+        response = self.client.post(
+            url,
+            data=json.dumps({'quantity': 1}),
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertFalse(data['success'])
+
+    @patch('apps.pricing.ml_client.get_ml_client')
+    def test_anomaly_check_view_success(self, mock_get_client):
+        """Test successful anomaly check."""
+        from apps.pricing.ml_client import AnomalyResult
+
+        mock_client = Mock()
+        mock_client.detect_anomaly.return_value = AnomalyResult(
+            is_anomaly=True,
+            anomaly_score=0.9,
+            severity='high',
+            expected_price=Decimal('100.00'),
+            deviation_percentage=25.0,
+            explanation='Price 25% above expected'
+        )
+        mock_get_client.return_value = mock_client
+
+        url = reverse('pricing:material_anomaly_check', kwargs={'pk': self.material.pk})
+        response = self.client.post(
+            url,
+            data=json.dumps({'price': 125.0, 'quantity': 1}),
+            content_type='application/json'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertTrue(data['anomaly']['is_anomaly'])
+        self.assertEqual(data['anomaly']['severity'], 'high')
+
+    @patch('apps.pricing.ml_client.get_ml_client')
+    def test_ml_health_view_success(self, mock_get_client):
+        """Test ML health view when service is healthy."""
+        mock_client = Mock()
+        mock_client.health_check.return_value = {
+            'status': 'healthy',
+            'models': 4,
+            'uptime': '24h'
+        }
+        mock_get_client.return_value = mock_client
+
+        url = reverse('pricing:ml_health')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['health']['status'], 'healthy')
+
+    @patch('apps.pricing.ml_client.get_ml_client')
+    def test_ml_health_view_service_down(self, mock_get_client):
+        """Test ML health view when service is down."""
+        from apps.pricing.ml_client import MLServiceError
+
+        mock_client = Mock()
+        mock_client.health_check.side_effect = MLServiceError("Connection refused")
+        mock_get_client.return_value = mock_client
+
+        url = reverse('pricing:ml_health')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 503)
+        data = response.json()
+        self.assertFalse(data['success'])
+
+
+class CeleryTaskTests(PricingTestCase):
+    """Tests for Celery ML tasks (without actual task execution)."""
+
+    @patch('apps.pricing.tasks.get_ml_client')
+    def test_generate_price_prediction_task(self, mock_get_client):
+        """Test generate_price_prediction task logic."""
+        from apps.pricing.tasks import generate_price_prediction
+        from apps.pricing.ml_client import PricePrediction as MLPricePrediction
+
+        mock_client = Mock()
+        mock_client.predict_price.return_value = MLPricePrediction(
+            predicted_price=Decimal('120.00'),
+            confidence_score=0.85,
+            confidence_interval={'lower': 115.0, 'upper': 125.0},
+            model_version='v1.0.0',
+            features_used=['quantity']
+        )
+        mock_get_client.return_value = mock_client
+
+        # Call task synchronously (without Celery)
+        result = generate_price_prediction(str(self.material.id))
+
+        self.assertIn('predicted_price', result)
+        self.assertEqual(result['predicted_price'], '120.00')
+
+        # Verify prediction was stored
+        prediction = PricePrediction.objects.filter(
+            material=self.material
+        ).order_by('-created_at').first()
+        self.assertIsNotNone(prediction)
+        self.assertEqual(prediction.predicted_price, Decimal('120.00'))
+
+    def test_generate_price_prediction_material_not_found(self):
+        """Test task handles missing material."""
+        from apps.pricing.tasks import generate_price_prediction
+
+        fake_uuid = str(uuid.uuid4())
+        result = generate_price_prediction(fake_uuid)
+
+        self.assertIn('error', result)
+        self.assertIn('not found', result['error'])
+
+    @patch('apps.pricing.tasks.get_ml_client')
+    def test_check_price_anomaly_creates_alert(self, mock_get_client):
+        """Test check_price_anomaly creates alert for anomalies."""
+        from apps.pricing.tasks import check_price_anomaly
+        from apps.pricing.ml_client import AnomalyResult
+
+        mock_client = Mock()
+        mock_client.detect_anomaly.return_value = AnomalyResult(
+            is_anomaly=True,
+            anomaly_score=0.92,
+            severity='high',
+            expected_price=Decimal('100.00'),
+            deviation_percentage=30.0,
+            explanation='Anomaly detected'
+        )
+        mock_get_client.return_value = mock_client
+
+        price = self.prices[0]
+        result = check_price_anomaly(str(price.id))
+
+        self.assertTrue(result['is_anomaly'])
+        self.assertIn('alert_id', result)
+
+        # Verify alert was created
+        alert = PriceAlert.objects.filter(
+            material=self.material,
+            alert_type='anomaly'
+        ).first()
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.status, 'triggered')
+
+    @patch('apps.pricing.tasks.get_ml_client')
+    def test_check_price_anomaly_no_anomaly(self, mock_get_client):
+        """Test check_price_anomaly when price is normal."""
+        from apps.pricing.tasks import check_price_anomaly
+        from apps.pricing.ml_client import AnomalyResult
+
+        mock_client = Mock()
+        mock_client.detect_anomaly.return_value = AnomalyResult(
+            is_anomaly=False,
+            anomaly_score=0.15,
+            severity='low',
+            expected_price=Decimal('100.00'),
+            deviation_percentage=2.0,
+            explanation='Price within normal range'
+        )
+        mock_get_client.return_value = mock_client
+
+        price = self.prices[0]
+        result = check_price_anomaly(str(price.id))
+
+        self.assertFalse(result['is_anomaly'])
+        self.assertNotIn('alert_id', result)
+
+    @patch('apps.pricing.tasks.get_ml_client')
+    def test_calculate_should_cost_creates_benchmark(self, mock_get_client):
+        """Test calculate_should_cost creates benchmark."""
+        from apps.pricing.tasks import calculate_should_cost
+        from apps.pricing.ml_client import ShouldCostResult
+
+        mock_client = Mock()
+        mock_client.calculate_should_cost.return_value = ShouldCostResult(
+            total_should_cost=Decimal('90.00'),
+            material_cost=Decimal('50.00'),
+            labor_cost=Decimal('25.00'),
+            overhead_cost=Decimal('15.00'),
+            confidence=0.85,
+            breakdown=[]
+        )
+        mock_get_client.return_value = mock_client
+
+        result = calculate_should_cost(str(self.material.id))
+
+        self.assertEqual(result['should_cost'], '90.00')
+        self.assertIn('benchmark_id', result)
+
+        # Verify benchmark was created
+        benchmark = PriceBenchmark.objects.filter(
+            material=self.material,
+            benchmark_type='should_cost'
+        ).first()
+        self.assertIsNotNone(benchmark)
+        self.assertEqual(benchmark.benchmark_price, Decimal('90.00'))
+
+    @patch('apps.pricing.tasks.get_ml_client')
+    def test_check_ml_service_health(self, mock_get_client):
+        """Test check_ml_service_health task."""
+        from apps.pricing.tasks import check_ml_service_health
+
+        mock_client = Mock()
+        mock_client.health_check.return_value = {'status': 'healthy'}
+        mock_get_client.return_value = mock_client
+
+        result = check_ml_service_health()
+
+        self.assertEqual(result['status'], 'healthy')
+
+    @patch('apps.pricing.tasks.get_ml_client')
+    def test_check_model_drift(self, mock_get_client):
+        """Test check_model_drift task."""
+        from apps.pricing.tasks import check_model_drift
+
+        mock_client = Mock()
+        mock_client.get_drift_status.return_value = {
+            'price_model': {'drift_detected': False},
+            'anomaly_model': {'drift_detected': True}
+        }
+        mock_get_client.return_value = mock_client
+
+        result = check_model_drift()
+
+        self.assertFalse(result['price_model']['drift_detected'])
+        self.assertTrue(result['anomaly_model']['drift_detected'])

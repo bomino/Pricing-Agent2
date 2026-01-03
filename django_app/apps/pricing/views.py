@@ -842,14 +842,308 @@ class PriceAlertViewSet(viewsets.ModelViewSet):
     """Price Alert API ViewSet"""
     serializer_class = PriceAlertSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
         return PriceAlert.objects.filter(
             organization=self.get_user_organization()
         ).select_related('material')
-    
+
     def perform_create(self, serializer):
         serializer.save(
             organization=self.get_user_organization(),
             user=self.request.user
         )
+
+
+# ML Integration Views
+
+class MaterialPricePredictionView(OrganizationRequiredMixin, View):
+    """Get AI-powered price prediction for a material"""
+
+    def get(self, request, pk):
+        """Get current prediction for material"""
+        material = get_object_or_404(
+            Material,
+            pk=pk,
+            organization=self.get_user_organization()
+        )
+
+        # Get latest prediction if available
+        latest_prediction = PricePrediction.objects.filter(
+            material=material,
+            organization=material.organization,
+            status='completed'
+        ).order_by('-created_at').first()
+
+        if latest_prediction:
+            return JsonResponse({
+                'success': True,
+                'prediction': {
+                    'predicted_price': float(latest_prediction.predicted_price),
+                    'confidence': latest_prediction.model_confidence or 0.0,
+                    'confidence_interval': latest_prediction.confidence_interval or {},
+                    'model_version': latest_prediction.model_version or 'unknown',
+                    'created_at': latest_prediction.created_at.isoformat(),
+                }
+            })
+
+        return JsonResponse({
+            'success': False,
+            'message': 'No prediction available. Click "Generate" to create one.'
+        })
+
+    def post(self, request, pk):
+        """Generate new price prediction for material"""
+        from .tasks import generate_price_prediction
+        from .ml_client import get_ml_client, MLServiceError
+
+        material = get_object_or_404(
+            Material,
+            pk=pk,
+            organization=self.get_user_organization()
+        )
+
+        # Check if ML service is available
+        try:
+            client = get_ml_client()
+            if not client.is_healthy():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'ML service is not available. Please try again later.'
+                }, status=503)
+
+            # Get prediction synchronously for immediate feedback
+            prediction = client.predict_price(
+                material_id=str(material.id),
+                quantity=float(material.minimum_order_quantity or 1)
+            )
+
+            # Store prediction
+            saved_prediction = PricePrediction.objects.create(
+                organization=material.organization,
+                material=material,
+                predicted_price=prediction.predicted_price,
+                confidence_interval=prediction.confidence_interval,
+                prediction_horizon_days=30,
+                model_version=prediction.model_version,
+                model_confidence=prediction.confidence_score,
+                status='completed'
+            )
+
+            return JsonResponse({
+                'success': True,
+                'prediction': {
+                    'predicted_price': float(prediction.predicted_price),
+                    'confidence': prediction.confidence_score,
+                    'confidence_interval': prediction.confidence_interval,
+                    'model_version': prediction.model_version,
+                    'id': str(saved_prediction.id)
+                }
+            })
+
+        except MLServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'ML service error: {str(e)}'
+            }, status=503)
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'Error generating prediction: {str(e)}'
+            }, status=500)
+
+
+class MaterialShouldCostView(OrganizationRequiredMixin, View):
+    """Calculate should-cost for a material"""
+
+    def get(self, request, pk):
+        """Get latest should-cost calculation"""
+        from .models import PriceBenchmark
+
+        material = get_object_or_404(
+            Material,
+            pk=pk,
+            organization=self.get_user_organization()
+        )
+
+        # Get latest should-cost benchmark
+        benchmark = PriceBenchmark.objects.filter(
+            material=material,
+            organization=material.organization,
+            benchmark_type='should_cost'
+        ).order_by('-created_at').first()
+
+        if benchmark:
+            return JsonResponse({
+                'success': True,
+                'should_cost': {
+                    'total': float(benchmark.benchmark_price),
+                    'notes': benchmark.calculation_method,
+                    'created_at': benchmark.created_at.isoformat(),
+                }
+            })
+
+        return JsonResponse({
+            'success': False,
+            'message': 'No should-cost calculation available.'
+        })
+
+    def post(self, request, pk):
+        """Calculate should-cost for material"""
+        from .ml_client import get_ml_client, MLServiceError
+        from .models import PriceBenchmark
+        from decimal import Decimal
+
+        material = get_object_or_404(
+            Material,
+            pk=pk,
+            organization=self.get_user_organization()
+        )
+
+        # Get components from request body
+        try:
+            import json
+            body = json.loads(request.body) if request.body else {}
+            components = body.get('components', {})
+        except json.JSONDecodeError:
+            components = {}
+
+        try:
+            client = get_ml_client()
+
+            result = client.calculate_should_cost(
+                material_id=str(material.id),
+                components=components,
+                quantity=float(material.minimum_order_quantity or 1)
+            )
+
+            # Store as benchmark
+            benchmark = PriceBenchmark.objects.create(
+                material=material,
+                organization=material.organization,
+                benchmark_type='should_cost',
+                benchmark_price=result.total_should_cost,
+                currency=material.currency or 'USD',
+                quantity=material.minimum_order_quantity or Decimal('1'),
+                period_start=timezone.now().date(),
+                period_end=timezone.now().date() + timedelta(days=90),
+                min_price=result.material_cost,
+                max_price=result.total_should_cost * Decimal('1.2'),
+                calculation_method=f"Material: ${result.material_cost}, Labor: ${result.labor_cost}, Overhead: ${result.overhead_cost}"
+            )
+
+            return JsonResponse({
+                'success': True,
+                'should_cost': {
+                    'total': float(result.total_should_cost),
+                    'material_cost': float(result.material_cost),
+                    'labor_cost': float(result.labor_cost),
+                    'overhead_cost': float(result.overhead_cost),
+                    'confidence': result.confidence,
+                    'breakdown': result.breakdown,
+                    'benchmark_id': str(benchmark.id)
+                }
+            })
+
+        except MLServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'ML service error: {str(e)}'
+            }, status=503)
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'Error calculating should-cost: {str(e)}'
+            }, status=500)
+
+
+class MaterialAnomalyCheckView(OrganizationRequiredMixin, View):
+    """Check if a price is anomalous for a material"""
+
+    def post(self, request, pk):
+        """Check price for anomalies"""
+        from .ml_client import get_ml_client, MLServiceError
+        import json
+
+        material = get_object_or_404(
+            Material,
+            pk=pk,
+            organization=self.get_user_organization()
+        )
+
+        try:
+            body = json.loads(request.body) if request.body else {}
+            price = float(body.get('price', 0))
+            quantity = float(body.get('quantity', 1))
+            supplier_id = body.get('supplier_id')
+
+            if price <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Price must be greater than 0'
+                }, status=400)
+
+            client = get_ml_client()
+
+            result = client.detect_anomaly(
+                material_id=str(material.id),
+                price=price,
+                supplier_id=supplier_id,
+                quantity=quantity
+            )
+
+            return JsonResponse({
+                'success': True,
+                'anomaly': {
+                    'is_anomaly': result.is_anomaly,
+                    'anomaly_score': result.anomaly_score,
+                    'severity': result.severity,
+                    'expected_price': float(result.expected_price) if result.expected_price else None,
+                    'deviation_percentage': result.deviation_percentage,
+                    'explanation': result.explanation
+                }
+            })
+
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON body'
+            }, status=400)
+
+        except MLServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'ML service error: {str(e)}'
+            }, status=503)
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'Error checking anomaly: {str(e)}'
+            }, status=500)
+
+
+class MLServiceHealthView(OrganizationRequiredMixin, View):
+    """Check ML service health status"""
+
+    def get(self, request):
+        """Get ML service health"""
+        from .ml_client import get_ml_client, MLServiceError
+
+        try:
+            client = get_ml_client()
+            health = client.health_check()
+
+            return JsonResponse({
+                'success': True,
+                'health': health
+            })
+
+        except MLServiceError as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e),
+                'health': {'status': 'unhealthy'}
+            }, status=503)

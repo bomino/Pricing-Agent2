@@ -186,6 +186,59 @@
                 </div>
             </div>
 
+            <!-- AI Predictions -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-brain text-purple-600 mr-2"></i>
+                    AI Insights
+                </h2>
+                <div class="space-y-3">
+                    <!-- Price Prediction -->
+                    <div id="prediction-container">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-600">AI Price Prediction</span>
+                            <button id="generate-prediction-btn"
+                                    class="text-xs text-purple-600 hover:text-purple-800"
+                                    onclick="generatePrediction()">
+                                <i class="fas fa-magic mr-1"></i> Generate
+                            </button>
+                        </div>
+                        <div id="prediction-result" class="p-3 bg-purple-50 rounded-lg">
+                            <p class="text-sm text-gray-500 text-center">
+                                Click "Generate" to get AI price prediction
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Should-Cost -->
+                    <div id="should-cost-container" class="pt-3 border-t border-gray-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-600">Should-Cost Analysis</span>
+                            <button id="calculate-should-cost-btn"
+                                    class="text-xs text-blue-600 hover:text-blue-800"
+                                    onclick="calculateShouldCost()">
+                                <i class="fas fa-calculator mr-1"></i> Calculate
+                            </button>
+                        </div>
+                        <div id="should-cost-result" class="p-3 bg-blue-50 rounded-lg">
+                            <p class="text-sm text-gray-500 text-center">
+                                Click "Calculate" to get should-cost estimate
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- ML Service Status -->
+                    <div class="pt-3 border-t border-gray-200">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">ML Service</span>
+                            <span id="ml-status" class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                                Checking...
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Timestamps -->
             <div class="bg-white rounded-lg shadow p-6">
                 <h2 class="text-lg font-semibold text-gray-900 mb-4">
@@ -262,5 +315,168 @@
             }
         });
     }
+
+    // Material ID from Django context
+    const materialId = '{{ material.pk }}';
+    const csrfToken = '{{ csrf_token }}';
+
+    // Check ML service health on page load
+    async function checkMLStatus() {
+        const statusEl = document.getElementById('ml-status');
+        try {
+            const response = await fetch('/pricing/ml/health/');
+            const data = await response.json();
+
+            if (data.status === 'healthy') {
+                statusEl.textContent = 'Online';
+                statusEl.className = 'text-xs px-2 py-1 rounded-full bg-green-100 text-green-600';
+            } else {
+                statusEl.textContent = 'Degraded';
+                statusEl.className = 'text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-600';
+            }
+        } catch (error) {
+            statusEl.textContent = 'Offline';
+            statusEl.className = 'text-xs px-2 py-1 rounded-full bg-red-100 text-red-600';
+        }
+    }
+
+    // Generate AI price prediction
+    async function generatePrediction() {
+        const btn = document.getElementById('generate-prediction-btn');
+        const resultEl = document.getElementById('prediction-result');
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Generating...';
+        resultEl.innerHTML = '<p class="text-sm text-gray-500 text-center"><i class="fas fa-spinner fa-spin"></i> Analyzing price data...</p>';
+
+        try {
+            const response = await fetch(`/pricing/materials/${materialId}/predict/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.predicted_price) {
+                const confidence = Math.round(data.confidence * 100);
+                const confidenceColor = confidence >= 80 ? 'green' : confidence >= 60 ? 'yellow' : 'red';
+
+                resultEl.innerHTML = `
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Predicted Price</span>
+                            <span class="text-lg font-bold text-purple-600">$${parseFloat(data.predicted_price).toFixed(2)}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Confidence</span>
+                            <span class="text-sm font-medium text-${confidenceColor}-600">${confidence}%</span>
+                        </div>
+                        ${data.confidence_interval ? `
+                        <div class="text-xs text-gray-500 text-center pt-1 border-t">
+                            Range: $${parseFloat(data.confidence_interval.lower).toFixed(2)} - $${parseFloat(data.confidence_interval.upper).toFixed(2)}
+                        </div>
+                        ` : ''}
+                        <div class="text-xs text-gray-400 text-center">
+                            Model: ${data.model_version || 'v1.0'}
+                        </div>
+                    </div>
+                `;
+            } else {
+                resultEl.innerHTML = `
+                    <p class="text-sm text-red-500 text-center">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        ${data.error || 'Unable to generate prediction'}
+                    </p>
+                `;
+            }
+        } catch (error) {
+            resultEl.innerHTML = `
+                <p class="text-sm text-red-500 text-center">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                    ML service unavailable
+                </p>
+            `;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-magic mr-1"></i> Generate';
+        }
+    }
+
+    // Calculate should-cost estimate
+    async function calculateShouldCost() {
+        const btn = document.getElementById('calculate-should-cost-btn');
+        const resultEl = document.getElementById('should-cost-result');
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Calculating...';
+        resultEl.innerHTML = '<p class="text-sm text-gray-500 text-center"><i class="fas fa-spinner fa-spin"></i> Analyzing cost components...</p>';
+
+        try {
+            const response = await fetch(`/pricing/materials/${materialId}/should-cost/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.total_should_cost) {
+                const confidence = Math.round(data.confidence * 100);
+
+                resultEl.innerHTML = `
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Should-Cost</span>
+                            <span class="text-lg font-bold text-blue-600">$${parseFloat(data.total_should_cost).toFixed(2)}</span>
+                        </div>
+                        <div class="text-xs text-gray-500 border-t pt-2 mt-2">
+                            <div class="flex justify-between">
+                                <span>Material</span>
+                                <span>$${parseFloat(data.material_cost || 0).toFixed(2)}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Labor</span>
+                                <span>$${parseFloat(data.labor_cost || 0).toFixed(2)}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Overhead</span>
+                                <span>$${parseFloat(data.overhead_cost || 0).toFixed(2)}</span>
+                            </div>
+                        </div>
+                        <div class="text-xs text-gray-400 text-center pt-1">
+                            Confidence: ${confidence}%
+                        </div>
+                    </div>
+                `;
+            } else {
+                resultEl.innerHTML = `
+                    <p class="text-sm text-red-500 text-center">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        ${data.error || 'Unable to calculate should-cost'}
+                    </p>
+                `;
+            }
+        } catch (error) {
+            resultEl.innerHTML = `
+                <p class="text-sm text-red-500 text-center">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                    ML service unavailable
+                </p>
+            `;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-calculator mr-1"></i> Calculate';
+        }
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        checkMLStatus();
+    });
 </script>
 {% endblock %}

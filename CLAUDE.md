@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AI Pricing Agent for Manufacturing & Construction Procurement - An enterprise B2B platform that automates cost benchmarking, validates quotes, and generates should-cost models using ML to enable 10-15% cost reduction in procurement operations.
 
-**Status**: Phase 1 & Phase 2 Complete (January 2026)
-**Latest Update**: Added complete report management system with preview, share, schedule, and delete functionality
+**Status**: Phase 1, 2 & 3 Complete (January 2026)
+**Latest Update**: ML/AI Integration complete - price predictions, should-cost modeling, anomaly detection, negotiation recommendations
 
 ## Architecture
 
@@ -16,13 +16,16 @@ Django (Port 8000) - Primary Application
 ├── Web Interface (HTMX + Alpine.js + Tailwind)
 ├── Business Logic & Workflows
 ├── Authentication & Authorization
+├── ML Client (ml_client.py)
 ├── Admin Panel
 └── Database Models (PostgreSQL + TimescaleDB)
 
-FastAPI (Port 8001) - ML Service (Ready for activation)
-├── Model Serving
-├── Async Calculations
-└── WebSocket Support
+FastAPI (Port 8001) - ML Service (ACTIVE)
+├── Price Prediction (LightGBM)
+├── Should-Cost Modeling
+├── Anomaly Detection
+├── WebSocket Support
+└── Prometheus Metrics
 ```
 
 ### Data Flow
@@ -35,13 +38,13 @@ FastAPI (Port 8001) - ML Service (Ready for activation)
 ```
 
 ### Django Apps
-- `apps.core` - Base models, RBAC, utilities, notification APIs, dashboard APIs
+- `apps.core` - Base models, RBAC (3 roles, 30+ permissions), utilities, notification APIs, dashboard APIs
 - `apps.accounts` - User management, profiles
 - `apps.data_ingestion` - File upload, column mapping, validation, processing
-- `apps.procurement` - Suppliers, RFQs, purchase orders, contracts (calculated stats)
-- `apps.pricing` - Materials, price history (TimescaleDB), alerts, price analytics
+- `apps.procurement` - Suppliers, RFQs, purchase orders, contracts, negotiation recommendations
+- `apps.pricing` - Materials, price history (TimescaleDB), alerts, ML client, predictions, signals
 - `apps.analytics` - Dashboards, KPIs, reports, anomaly detection (calculated metrics)
-- `apps.integrations` - External system connectors
+- `apps.integrations` - External system connectors (Bloomberg/Reuters framework)
 
 ## Development Commands
 
@@ -191,6 +194,12 @@ Port: 5432
 - Notifications: `/api/notifications/`
 - Unread Count: `/api/notifications/unread-count/`
 
+### ML Integration Endpoints
+- Price Prediction: `/pricing/materials/<uuid:pk>/predict/` (POST)
+- Should-Cost: `/pricing/materials/<uuid:pk>/should-cost/` (POST)
+- Anomaly Check: `/pricing/materials/<uuid:pk>/anomaly-check/` (POST)
+- ML Health: `/pricing/ml/health/` (GET)
+
 ## Services
 
 ### Data Processing (`apps/data_ingestion/services/`)
@@ -236,6 +245,17 @@ Batch scripts available:
 Always add `--settings=pricing_agent.settings_local` when running locally.
 
 ## Recent Fixes (January 2026)
+
+### Phase 3: ML/AI Integration (NEW)
+- Created `Dockerfile.fastapi` for ML service container
+- Added FastAPI service to `docker-compose.simple.yml`
+- Created `ml_client.py` - Django-FastAPI communication layer
+- Created `tasks.py` - Celery tasks for ML operations
+- Created `signals.py` - Auto anomaly detection on new prices
+- Created `recommendations.py` - Negotiation recommendation engine
+- Added ML views: MaterialPricePredictionView, MaterialShouldCostView, MaterialAnomalyCheckView, MLServiceHealthView
+- Updated material_detail.html with AI Insights section
+- Added `ML_ANOMALY_DETECTION_ENABLED` setting for local testing
 
 ### Hardcoded Values Replaced with Calculated Data
 - Dashboard MTD spend now calculated from PurchaseOrder model

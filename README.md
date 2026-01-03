@@ -2,11 +2,11 @@
 
 An enterprise-grade AI-powered platform that automates cost benchmarking, validates quotes, and generates should-cost models to enable 10-15% cost reduction in procurement operations.
 
-## 📊 Project Status: Phase 2 Complete ✅
+## 📊 Project Status: Phase 3 Complete ✅
 
 **Repository**: https://github.com/bomino/Pricing-Agent2
-**Latest Update**: Fixed hardcoded values, replaced with calculated metrics across all views
-**Last Updated**: January 2, 2026
+**Latest Update**: ML/AI Integration complete - price predictions, should-cost modeling, anomaly detection
+**Last Updated**: January 3, 2026
 
 ## 🎯 Implementation Phases
 
@@ -24,7 +24,17 @@ An enterprise-grade AI-powered platform that automates cost benchmarking, valida
 - **API Endpoints**: RESTful APIs for all analytics features
 - **Comprehensive Testing**: All 7 test categories passing
 
+### ✅ Phase 3: ML/AI Integration (COMPLETE - January 2026)
+- **FastAPI ML Service**: Activated and integrated with Django (port 8001)
+- **Price Prediction Models**: LightGBM-based predictions with confidence intervals
+- **Should-Cost Modeling**: Full cost breakdown (material, labor, overhead)
+- **ML Anomaly Detection**: Auto-triggers on new prices via Django signals
+- **Negotiation Recommendations**: AI-powered engine with savings analysis
+- **ML Client Integration**: `ml_client.py` for Django-FastAPI communication
+- **Celery Tasks**: Async ML operations with retry logic
+
 ### 🆕 Recent Enhancements (January 2026)
+- **ML Integration UI**: AI Insights section on material detail pages
 - **Analytics Charts Fixed**: Trends tab charts now render with calculated data from database
 - **Calculated Metrics**: Replaced all hardcoded values with database-calculated metrics
 - **Pricing Module Overhaul**: UUID-based URLs, price history views, material analytics
@@ -53,6 +63,14 @@ An enterprise-grade AI-powered platform that automates cost benchmarking, valida
 - ✅ **Anomaly Detection**: Statistical z-score based outlier identification
 - ✅ **Savings Opportunities**: Automated identification of cost reduction potential
 
+### ML/AI Features (Phase 3)
+- ✅ **Price Predictions**: LightGBM-based forecasting with confidence intervals
+- ✅ **Should-Cost Modeling**: AI-calculated cost breakdown (material, labor, overhead)
+- ✅ **ML Anomaly Detection**: Auto-triggered on new prices via Django signals
+- ✅ **Negotiation Recommendations**: AI engine suggesting target prices and savings
+- ✅ **ML Service Health**: Real-time status monitoring on material pages
+- ✅ **Batch Predictions**: Async processing for multiple materials
+
 ### Procurement Module
 - ✅ **RFQ Management**: Create, edit, duplicate, and manage Request for Quotes
 - ✅ **Supplier Management**: Comprehensive supplier database with performance tracking
@@ -71,6 +89,7 @@ An enterprise-grade AI-powered platform that automates cost benchmarking, valida
 - ✅ **Background Processing**: Celery with Redis for async tasks
 - ✅ **Notification APIs**: Real-time notification polling endpoints
 - ✅ **Dashboard APIs**: HTMX-compatible endpoints for dynamic content
+- ✅ **RBAC System**: Role-based access control (Admin, Analyst, User)
 
 ## 📈 Performance Metrics
 
@@ -96,17 +115,22 @@ An enterprise-grade AI-powered platform that automates cost benchmarking, valida
 │  │  • Data Ingestion    • Analytics Engine         │   │
 │  │  • Price Recording   • Quality Scoring          │   │
 │  │  • Conflict Resolution • API Endpoints          │   │
+│  │  • ML Client         • Celery Tasks             │   │
 │  └─────────────────────────────────────────────────┘   │
 └───────────────────────┬─────────────────────────────────┘
                         │
-┌───────────────────────▼─────────────────────────────────┐
-│              PostgreSQL + TimescaleDB                    │
-│         (Time-series data, Price history)                │
-└──────────────────────────────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────┐
-│                  Redis (Caching + Queue)                 │
-└──────────────────────────────────────────────────────────┘
+        ┌───────────────┼───────────────┐
+        │               │               │
+        ▼               ▼               ▼
+┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+│   FastAPI ML  │ │  PostgreSQL   │ │    Redis      │
+│  (Port 8001)  │ │ + TimescaleDB │ │ Cache + Queue │
+│───────────────│ │───────────────│ │───────────────│
+│ • Predictions │ │ • Time-series │ │ • ML caching  │
+│ • Should-Cost │ │ • Price data  │ │ • Task queue  │
+│ • Anomaly Det │ │ • Materials   │ │ • Sessions    │
+│ • WebSockets  │ │ • Suppliers   │ │               │
+└───────────────┘ └───────────────┘ └───────────────┘
 ```
 
 ## 🚀 Quick Start
@@ -177,28 +201,28 @@ python run_complete_e2e_test.py
 - Data Quality Scoring: ✅ PASSED
 - API Endpoints: ✅ PASSED
 
-## 📋 Next Development Steps
+## 📋 Implementation Status & Roadmap
 
-### Phase 3: ML/AI Integration (Q1 2025)
-- [ ] Activate FastAPI ML service
-- [ ] Implement price prediction models
-- [ ] Should-cost modeling algorithms
-- [ ] Advanced anomaly detection with ML
-- [ ] Automated negotiation recommendations
+### ✅ Phase 3: ML/AI Integration (COMPLETE)
+- [x] Activate FastAPI ML service
+- [x] Implement price prediction models
+- [x] Should-cost modeling algorithms
+- [x] Advanced anomaly detection with ML
+- [x] Automated negotiation recommendations
 
-### Phase 4: Enterprise Features (Q2 2025)
-- [ ] WebSocket real-time updates
-- [ ] ERP system integration (SAP, Oracle)
-- [ ] Supplier portal with collaboration
-- [ ] Advanced RBAC with fine-grained permissions
+### ⚠️ Phase 4: Enterprise Features (PARTIAL)
+- [x] Advanced RBAC with fine-grained permissions (`core/rbac.py` - 3 roles, 30+ permissions)
+- [ ] WebSocket real-time updates (FastAPI has WebSockets, Django needs Channels)
+- [ ] ERP system integration (SAP, Oracle) - framework only, no API connections
+- [ ] Supplier portal with collaboration - basic CRUD exists, no portal UI
 - [ ] Multi-language support
 
-### Phase 5: Advanced Analytics (Q3 2025)
-- [ ] Predictive spend analytics
-- [ ] Market intelligence integration
-- [ ] Supply chain risk assessment
-- [ ] Contract compliance monitoring
-- [ ] Automated RFQ generation
+### 📋 Phase 5: Advanced Analytics (NOT STARTED - Q3 2026)
+- [ ] Predictive spend analytics (price prediction exists, spend forecasting needed)
+- [ ] Market intelligence integration (Bloomberg/Reuters stubs only)
+- [ ] Supply chain risk assessment (basic risk_level field, no scoring model)
+- [ ] Contract compliance monitoring (Contract model exists, no compliance checks)
+- [ ] Automated RFQ generation (manual creation only)
 
 ## 📊 Data Processing Pipeline
 
@@ -223,6 +247,7 @@ SECRET_KEY=your-secret-key
 DATABASE_URL=postgres://user:pass@localhost/pricing_agent
 REDIS_URL=redis://localhost:6379/0
 CELERY_BROKER_URL=redis://localhost:6379/1
+ML_SERVICE_URL=http://localhost:8001  # FastAPI ML service
 ```
 
 ### Key Settings Files

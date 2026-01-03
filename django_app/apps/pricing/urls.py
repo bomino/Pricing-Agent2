@@ -40,4 +40,10 @@ urlpatterns = [
     
     # Dashboard
     path('dashboard/', views.PricingDashboardView.as_view(), name='dashboard'),
+
+    # ML Integration endpoints
+    path('materials/<uuid:pk>/predict/', views.MaterialPricePredictionView.as_view(), name='material_predict'),
+    path('materials/<uuid:pk>/should-cost/', views.MaterialShouldCostView.as_view(), name='material_should_cost'),
+    path('materials/<uuid:pk>/anomaly-check/', views.MaterialAnomalyCheckView.as_view(), name='material_anomaly_check'),
+    path('ml/health/', views.MLServiceHealthView.as_view(), name='ml_health'),
 ]
