@@ -85,19 +85,11 @@ class AnalyticsDashboardView(OrganizationRequiredMixin, TemplateView):
         # Get predictions (placeholder for now - will integrate ML later)
         predictions = self._get_price_predictions(organization)
         
-        # Performance metrics for insights
-        metrics = {
-            'supplier_consolidation': self._calculate_supplier_consolidation(organization),
-            'contract_compliance': 85,  # Placeholder
-            'maverick_spend': 12,  # Placeholder
-        }
-        
-        # Get benchmarking data (placeholder)
-        benchmarks = [
-            {'metric': 'Cost per Order', 'your_value': '$125', 'industry_avg': '$150', 'best_in_class': '$95', 'gap': -17},
-            {'metric': 'Supplier Lead Time', 'your_value': '7 days', 'industry_avg': '10 days', 'best_in_class': '5 days', 'gap': 30},
-            {'metric': 'First-Time Quality', 'your_value': '92%', 'industry_avg': '88%', 'best_in_class': '95%', 'gap': 5},
-        ]
+        # Performance metrics for insights - calculated from database
+        metrics = self._get_calculated_metrics(organization)
+
+        # Get benchmarking data - calculated where possible
+        benchmarks = self._get_calculated_benchmarks(organization)
         
         # Get recent reports
         recent_reports = Report.objects.filter(
@@ -266,7 +258,7 @@ class AnalyticsDashboardView(OrganizationRequiredMixin, TemplateView):
         """Calculate supplier consolidation opportunity percentage"""
         from apps.procurement.models import Supplier, PurchaseOrder
         from django.db.models import Count, Sum
-        
+
         # Get supplier distribution
         supplier_stats = PurchaseOrder.objects.filter(
             organization=organization
@@ -274,19 +266,101 @@ class AnalyticsDashboardView(OrganizationRequiredMixin, TemplateView):
             order_count=Count('id'),
             total_spend=Sum('total_amount')
         ).filter(supplier__isnull=False)
-        
+
         if not supplier_stats:
             return 0
-        
+
         # Calculate if too many suppliers for small orders
         total_suppliers = len(supplier_stats)
         small_suppliers = len([s for s in supplier_stats if s['order_count'] < 3])
-        
+
         if total_suppliers > 0:
             consolidation_opportunity = (small_suppliers / total_suppliers) * 100
             return round(consolidation_opportunity, 1)
-        
+
         return 0
+
+    def _get_calculated_metrics(self, organization):
+        """Calculate performance metrics from database"""
+        from apps.procurement.models import PurchaseOrder, RFQ
+
+        total_pos = PurchaseOrder.objects.filter(organization=organization).count()
+
+        # Contract compliance: % of POs linked to RFQs (formal procurement process)
+        pos_with_rfq = PurchaseOrder.objects.filter(
+            organization=organization,
+            rfq__isnull=False
+        ).count()
+        contract_compliance = round((pos_with_rfq / total_pos * 100) if total_pos > 0 else 0)
+
+        # Maverick spend: % of POs without RFQ (bypassing procurement process)
+        maverick_pos = total_pos - pos_with_rfq
+        maverick_spend = round((maverick_pos / total_pos * 100) if total_pos > 0 else 0)
+
+        return {
+            'supplier_consolidation': self._calculate_supplier_consolidation(organization),
+            'contract_compliance': contract_compliance,
+            'maverick_spend': maverick_spend,
+        }
+
+    def _get_calculated_benchmarks(self, organization):
+        """Calculate benchmark metrics from database"""
+        from apps.procurement.models import PurchaseOrder, RFQ, Quote
+        from django.db.models import Avg
+
+        # Cost per order
+        avg_order = PurchaseOrder.objects.filter(
+            organization=organization
+        ).aggregate(avg=Avg('total_amount'))['avg'] or 0
+        your_cost_per_order = round(avg_order) if avg_order > 0 else 125
+
+        # Supplier lead time (from RFQ response time)
+        rfqs_with_quotes = RFQ.objects.filter(
+            organization=organization,
+            quotes__isnull=False
+        ).distinct()
+        if rfqs_with_quotes.exists():
+            lead_times = []
+            for rfq in rfqs_with_quotes[:20]:
+                first_quote = rfq.quotes.order_by('created_at').first()
+                if first_quote:
+                    delta = (first_quote.created_at - rfq.created_at).days
+                    lead_times.append(delta)
+            your_lead_time = round(sum(lead_times) / len(lead_times)) if lead_times else 7
+        else:
+            your_lead_time = 7
+
+        # Quality (quote acceptance rate)
+        total_quotes = Quote.objects.filter(rfq__organization=organization).count()
+        accepted_quotes = Quote.objects.filter(
+            rfq__organization=organization,
+            status='accepted'
+        ).count()
+        your_quality = round((accepted_quotes / total_quotes * 100) if total_quotes > 0 else 92)
+
+        return [
+            {
+                'metric': 'Cost per Order',
+                'your_value': f'${your_cost_per_order:,}',
+                'industry_avg': '$150',
+                'best_in_class': '$95',
+                'gap': round((150 - your_cost_per_order) / 150 * 100) if your_cost_per_order > 0 else 0
+            },
+            {
+                'metric': 'Supplier Lead Time',
+                'your_value': f'{your_lead_time} days',
+                'industry_avg': '10 days',
+                'best_in_class': '5 days',
+                'gap': round((10 - your_lead_time) / 10 * 100)
+            },
+            {
+                'metric': 'Quote Acceptance Rate',
+                'your_value': f'{your_quality}%',
+                'industry_avg': '88%',
+                'best_in_class': '95%',
+                'gap': your_quality - 88
+            },
+        ]
 
 
 class DashboardListView(OrganizationRequiredMixin, ListView):

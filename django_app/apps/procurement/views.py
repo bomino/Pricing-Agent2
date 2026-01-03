@@ -893,14 +893,14 @@ class ProcurementDashboardView(OrganizationRequiredMixin, TemplateView):
             'spend_trend': round(spend_trend, 1),
             'previous_spend': previous_spend,
             'avg_supplier_rating': round(avg_rating, 1) if avg_rating else 0,
-            'cost_savings': 0,  # Would need actual calculation from quote vs budget comparisons
+            'cost_savings': self._calculate_cost_savings(organization),
         }
-        
+
         # Get recent RFQs
         context['recent_rfqs'] = RFQ.objects.filter(
             organization=organization
         ).order_by('-created_at')[:5]
-        
+
         # Get top suppliers by value
         context['top_suppliers'] = Supplier.objects.filter(
             organization=organization,
@@ -908,13 +908,9 @@ class ProcurementDashboardView(OrganizationRequiredMixin, TemplateView):
         ).annotate(
             total_value=Sum('quote__total_value', filter=Q(quote__status='approved'))
         ).order_by('-total_value')[:5]
-        
-        # Recent activities (placeholder - would come from an activity log)
-        context['recent_activities'] = [
-            {'description': 'New quote received from ABC Suppliers', 'timestamp': now - timedelta(hours=2)},
-            {'description': 'RFQ-2024-001 approved', 'timestamp': now - timedelta(hours=5)},
-            {'description': 'Supplier XYZ Corp added', 'timestamp': now - timedelta(days=1)},
-        ]
+
+        # Recent activities from actual database records
+        context['recent_activities'] = self._get_recent_activities(organization)
         
         # Pending actions count
         context['pending_actions'] = {
@@ -933,8 +929,99 @@ class ProcurementDashboardView(OrganizationRequiredMixin, TemplateView):
                 status='pending_approval'
             ).count(),
         }
-        
+
         return context
+
+    def _calculate_cost_savings(self, organization):
+        """Calculate cost savings from accepted quotes vs other quotes for same RFQ"""
+        from decimal import Decimal
+
+        # Get awarded RFQs with multiple quotes
+        awarded_rfqs = RFQ.objects.filter(
+            organization=organization,
+            status='awarded',
+            awarded_quote__isnull=False
+        ).prefetch_related('quotes')
+
+        total_savings = Decimal('0')
+        for rfq in awarded_rfqs:
+            awarded_quote = rfq.awarded_quote
+            if awarded_quote:
+                # Compare with average of other quotes
+                other_quotes = rfq.quotes.exclude(id=awarded_quote.id)
+                if other_quotes.exists():
+                    avg_other = other_quotes.aggregate(avg=Avg('total_amount'))['avg']
+                    if avg_other and awarded_quote.total_amount:
+                        savings = avg_other - awarded_quote.total_amount
+                        if savings > 0:
+                            total_savings += Decimal(str(savings))
+
+        return float(total_savings)
+
+    def _get_recent_activities(self, organization):
+        """Get recent activities from actual database records"""
+        from itertools import chain
+        from operator import attrgetter
+
+        activities = []
+
+        # Recent quotes (submitted, accepted, rejected)
+        recent_quotes = Quote.objects.filter(
+            organization=organization
+        ).select_related('supplier', 'rfq').order_by('-updated_at')[:5]
+
+        for quote in recent_quotes:
+            if quote.status == 'submitted':
+                desc = f"Quote received from {quote.supplier.name}"
+            elif quote.status == 'accepted':
+                desc = f"Quote from {quote.supplier.name} accepted"
+            elif quote.status == 'rejected':
+                desc = f"Quote from {quote.supplier.name} rejected"
+            else:
+                desc = f"Quote {quote.quote_number} updated"
+
+            activities.append({
+                'description': desc,
+                'timestamp': quote.updated_at,
+                'type': 'quote'
+            })
+
+        # Recent RFQ status changes
+        recent_rfqs = RFQ.objects.filter(
+            organization=organization
+        ).order_by('-updated_at')[:5]
+
+        for rfq in recent_rfqs:
+            if rfq.status == 'published':
+                desc = f"RFQ {rfq.rfq_number} published"
+            elif rfq.status == 'awarded':
+                desc = f"RFQ {rfq.rfq_number} awarded"
+            elif rfq.status == 'closed':
+                desc = f"RFQ {rfq.rfq_number} closed"
+            else:
+                desc = f"RFQ {rfq.rfq_number} created"
+
+            activities.append({
+                'description': desc,
+                'timestamp': rfq.updated_at,
+                'type': 'rfq'
+            })
+
+        # Recent suppliers added
+        recent_suppliers = Supplier.objects.filter(
+            organization=organization
+        ).order_by('-created_at')[:3]
+
+        for supplier in recent_suppliers:
+            activities.append({
+                'description': f"Supplier {supplier.name} added",
+                'timestamp': supplier.created_at,
+                'type': 'supplier'
+            })
+
+        # Sort by timestamp and return top 5
+        activities.sort(key=lambda x: x['timestamp'], reverse=True)
+        return activities[:5]
 
 
 # API ViewSets

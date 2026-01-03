@@ -45,7 +45,6 @@ urlpatterns = [
     
     # Dashboard views
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
-    path('dashboard/old/', TemplateView.as_view(template_name='dashboard_old.html'), name='dashboard_old'),
 
     # Dashboard API endpoints (for HTMX)
     path('api/dashboard/recent-rfqs/', recent_rfqs_api, name='recent_rfqs_api'),

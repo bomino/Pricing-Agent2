@@ -1191,7 +1191,8 @@ document.getElementById('volumeChange').addEventListener('input', function(e) {
 function calculateScenarioImpact() {
     const priceIncrease = document.getElementById('priceIncrease').value;
     const volumeChange = document.getElementById('volumeChange').value;
-    const baseSpend = 62537; // From actual data
+    // Calculate base spend from actual trend data (sum of last 6 months)
+    const baseSpend = trendData.monthlySpend.reduce((a, b) => a + b, 0);
     const impact = baseSpend * (1 + priceIncrease/100) * (1 + volumeChange/100) - baseSpend;
     document.getElementById('projectedImpact').textContent = '$' + Math.round(impact).toLocaleString();
 }
