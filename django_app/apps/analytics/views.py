@@ -845,12 +845,8 @@ class InsightsTabView(OrganizationRequiredMixin, TemplateView):
         # Detect price anomalies
         anomalies = self._detect_price_anomalies(organization)
         
-        # Performance metrics
-        metrics = {
-            'supplier_consolidation': self._calculate_supplier_consolidation(organization),
-            'contract_compliance': 85,
-            'maverick_spend': 12,
-        }
+        # Performance metrics - calculated from database
+        metrics = self._get_calculated_metrics(organization)
         
         context.update({
             'opportunities': opportunities,
@@ -930,6 +926,38 @@ class InsightsTabView(OrganizationRequiredMixin, TemplateView):
             consolidation_opportunity = (small_suppliers / total_suppliers) * 100
             return round(consolidation_opportunity, 1)
         return 0
+
+    def _get_calculated_metrics(self, organization):
+        """Calculate performance metrics from database"""
+        from apps.procurement.models import PurchaseOrder
+        from django.db.models import Sum
+
+        total_pos = PurchaseOrder.objects.filter(organization=organization).count()
+
+        # Contract compliance: % of POs with approved/completed status (formal process)
+        compliant_pos = PurchaseOrder.objects.filter(
+            organization=organization,
+            status__in=['approved', 'completed']
+        ).count()
+        contract_compliance = round((compliant_pos / total_pos * 100) if total_pos > 0 else 0)
+
+        # Maverick spend: % of spend on draft/rejected POs (not following proper process)
+        total_spend = PurchaseOrder.objects.filter(
+            organization=organization
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+        maverick_spend_amount = PurchaseOrder.objects.filter(
+            organization=organization,
+            status__in=['draft', 'rejected']
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+
+        maverick_spend = round((float(maverick_spend_amount) / float(total_spend) * 100) if total_spend > 0 else 0)
+
+        return {
+            'supplier_consolidation': self._calculate_supplier_consolidation(organization),
+            'contract_compliance': contract_compliance,
+            'maverick_spend': maverick_spend,
+        }
 
 
 class TrendsTabView(OrganizationRequiredMixin, TemplateView):
@@ -1127,33 +1155,117 @@ class PredictionsTabView(OrganizationRequiredMixin, TemplateView):
 
 class BenchmarksTabView(OrganizationRequiredMixin, TemplateView):
     """Industry benchmarking tab for performance comparison
-    
+
     Shows organization metrics compared to:
     - Industry averages
     - Best-in-class performers
     - Gap analysis (percentage difference)
-    
-    Currently uses placeholder data. Will integrate with
-    external benchmarking APIs in future phases.
+
+    Calculates actual metrics from database and compares
+    against industry benchmarks.
     """
     template_name = 'analytics/tabs/benchmarks.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # Benchmark data (placeholder for now)
-        benchmarks = [
-            {'metric': 'Cost per Order', 'your_value': '$125', 'industry_avg': '$150', 'best_in_class': '$95', 'gap': -17},
-            {'metric': 'Supplier Lead Time', 'your_value': '7 days', 'industry_avg': '10 days', 'best_in_class': '5 days', 'gap': 30},
-            {'metric': 'First-Time Quality', 'your_value': '92%', 'industry_avg': '88%', 'best_in_class': '95%', 'gap': 5},
-            {'metric': 'Order Accuracy', 'your_value': '96%', 'industry_avg': '94%', 'best_in_class': '99%', 'gap': 2},
-            {'metric': 'Supplier Diversity', 'your_value': '18%', 'industry_avg': '25%', 'best_in_class': '35%', 'gap': -28},
-        ]
-        
+        organization = self.get_user_organization()
+
+        # Calculate benchmarks from database
+        benchmarks = self._get_calculated_benchmarks(organization)
+
         context.update({
             'benchmarks': benchmarks,
         })
         return context
+
+    def _get_calculated_benchmarks(self, organization):
+        """Calculate benchmark metrics from database"""
+        from apps.procurement.models import PurchaseOrder, RFQ, Quote, Supplier
+        from django.db.models import Avg, Count
+
+        # Cost per order (average PO amount)
+        avg_order = PurchaseOrder.objects.filter(
+            organization=organization
+        ).aggregate(avg=Avg('total_amount'))['avg'] or 0
+        your_cost_per_order = round(avg_order) if avg_order > 0 else 0
+
+        # Supplier lead time (from RFQ response time)
+        rfqs_with_quotes = RFQ.objects.filter(
+            organization=organization,
+            quotes__isnull=False
+        ).distinct()
+        if rfqs_with_quotes.exists():
+            lead_times = []
+            for rfq in rfqs_with_quotes[:20]:
+                first_quote = rfq.quotes.order_by('created_at').first()
+                if first_quote:
+                    delta = (first_quote.created_at - rfq.created_at).days
+                    lead_times.append(delta)
+            your_lead_time = round(sum(lead_times) / len(lead_times)) if lead_times else 7
+        else:
+            your_lead_time = 7
+
+        # Quote acceptance rate (quality metric)
+        total_quotes = Quote.objects.filter(rfq__organization=organization).count()
+        accepted_quotes = Quote.objects.filter(
+            rfq__organization=organization,
+            status='accepted'
+        ).count()
+        your_quality = round((accepted_quotes / total_quotes * 100) if total_quotes > 0 else 0)
+
+        # Order accuracy (completed vs total POs)
+        total_pos = PurchaseOrder.objects.filter(organization=organization).count()
+        completed_pos = PurchaseOrder.objects.filter(
+            organization=organization,
+            status='completed'
+        ).count()
+        order_accuracy = round((completed_pos / total_pos * 100) if total_pos > 0 else 0)
+
+        # Supplier diversity (unique active suppliers / total)
+        total_suppliers = Supplier.objects.filter(organization=organization).count()
+        active_suppliers = Supplier.objects.filter(
+            organization=organization,
+            status='active'
+        ).count()
+        supplier_diversity = round((active_suppliers / total_suppliers * 100) if total_suppliers > 0 else 0)
+
+        return [
+            {
+                'metric': 'Cost per Order',
+                'your_value': f'${your_cost_per_order:,}' if your_cost_per_order > 0 else 'N/A',
+                'industry_avg': '$150',
+                'best_in_class': '$95',
+                'gap': round((150 - your_cost_per_order) / 150 * 100) if your_cost_per_order > 0 else 0
+            },
+            {
+                'metric': 'Supplier Lead Time',
+                'your_value': f'{your_lead_time} days',
+                'industry_avg': '10 days',
+                'best_in_class': '5 days',
+                'gap': round((10 - your_lead_time) / 10 * 100)
+            },
+            {
+                'metric': 'Quote Acceptance Rate',
+                'your_value': f'{your_quality}%' if your_quality > 0 else 'N/A',
+                'industry_avg': '88%',
+                'best_in_class': '95%',
+                'gap': your_quality - 88 if your_quality > 0 else 0
+            },
+            {
+                'metric': 'Order Accuracy',
+                'your_value': f'{order_accuracy}%' if order_accuracy > 0 else 'N/A',
+                'industry_avg': '94%',
+                'best_in_class': '99%',
+                'gap': order_accuracy - 94 if order_accuracy > 0 else 0
+            },
+            {
+                'metric': 'Supplier Diversity',
+                'your_value': f'{supplier_diversity}%' if supplier_diversity > 0 else 'N/A',
+                'industry_avg': '25%',
+                'best_in_class': '35%',
+                'gap': supplier_diversity - 25 if supplier_diversity > 0 else 0
+            },
+        ]
 
 
 class ReportsTabView(OrganizationRequiredMixin, TemplateView):

@@ -698,7 +698,26 @@ class ProcurementAnalyticsViewSet(viewsets.ViewSet):
     def get_organization(self):
         """Get user's organization"""
         return self.request.user.profile.organization
-    
+
+    def _calculate_avg_response_time(self, org):
+        """Calculate average response time (days between RFQ creation and first quote)"""
+        rfqs_with_quotes = RFQ.objects.filter(
+            organization=org,
+            quotes__isnull=False
+        ).distinct()
+
+        if not rfqs_with_quotes.exists():
+            return 0
+
+        response_times = []
+        for rfq in rfqs_with_quotes[:50]:  # Sample last 50 for performance
+            first_quote = rfq.quotes.order_by('created_at').first()
+            if first_quote:
+                delta = (first_quote.created_at - rfq.created_at).total_seconds() / 86400  # Convert to days
+                response_times.append(delta)
+
+        return round(sum(response_times) / len(response_times), 1) if response_times else 0
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """Get overall procurement statistics"""
@@ -731,6 +750,22 @@ class ProcurementAnalyticsViewSet(viewsets.ViewSet):
             organization=org, rating__isnull=False
         ).aggregate(avg=Avg('rating'))['avg'] or Decimal('0')
         
+        # Calculate average response time (days between RFQ creation and first quote)
+        avg_response_time = self._calculate_avg_response_time(org)
+
+        # Aggregate by status/type
+        rfqs_by_status = dict(RFQ.objects.filter(organization=org).values('status').annotate(
+            count=Count('id')
+        ).values_list('status', 'count'))
+
+        quotes_by_status = dict(Quote.objects.filter(organization=org).values('status').annotate(
+            count=Count('id')
+        ).values_list('status', 'count'))
+
+        contracts_by_type = dict(Contract.objects.filter(organization=org).values('contract_type').annotate(
+            count=Count('id')
+        ).values_list('contract_type', 'count'))
+
         stats_data = {
             'total_suppliers': total_suppliers,
             'active_suppliers': active_suppliers,
@@ -743,11 +778,11 @@ class ProcurementAnalyticsViewSet(viewsets.ViewSet):
             'total_contract_value': total_contract_value,
             'average_quote_value': average_quote_value,
             'average_supplier_rating': average_supplier_rating,
-            'average_response_time': 3.5,  # Placeholder - implement actual calculation
-            'suppliers_by_country': {},  # Placeholder - implement actual aggregation
-            'rfqs_by_status': {},  # Placeholder - implement actual aggregation
-            'quotes_by_status': {},  # Placeholder - implement actual aggregation
-            'contracts_by_type': {},  # Placeholder - implement actual aggregation
+            'average_response_time': avg_response_time,
+            'suppliers_by_country': {},  # No country field on Supplier model
+            'rfqs_by_status': rfqs_by_status,
+            'quotes_by_status': quotes_by_status,
+            'contracts_by_type': contracts_by_type,
         }
         
         serializer = ProcurementStatsSerializer(stats_data)
@@ -758,35 +793,57 @@ class ProcurementAnalyticsViewSet(viewsets.ViewSet):
         """Get supplier performance analytics"""
         org = self.get_organization()
         suppliers = Supplier.objects.filter(organization=org, status='active')
-        
+
         performance_data = []
         for supplier in suppliers:
             quotes = supplier.quotes.all()
             contracts = supplier.contracts.all()
-            
+
             total_quotes = quotes.count()
             accepted_quotes = quotes.filter(status='accepted').count()
             total_contract_value = contracts.aggregate(
                 total=Sum('total_value')
             )['total'] or Decimal('0')
-            
+
+            # Calculate supplier-specific response time
+            supplier_response_time = self._calculate_supplier_response_time(supplier)
+
+            # Calculate delivery metrics from contracts
+            completed_contracts = contracts.filter(status='completed').count()
+            total_contracts = contracts.count()
+
             performance_data.append({
                 'supplier': SupplierListSerializer(supplier).data,
                 'performance_score': supplier.calculate_performance_score() or 0,
                 'total_quotes': total_quotes,
                 'accepted_quotes': accepted_quotes,
                 'quote_acceptance_rate': (accepted_quotes / total_quotes * 100) if total_quotes > 0 else 0,
-                'average_response_time': 2.5,  # Placeholder
+                'average_response_time': supplier_response_time,
                 'total_contract_value': total_contract_value,
-                'on_time_deliveries': 0,  # Placeholder
-                'total_deliveries': 0,  # Placeholder
+                'on_time_deliveries': completed_contracts,
+                'total_deliveries': total_contracts,
                 'on_time_delivery_rate': supplier.on_time_delivery_rate or 0,
             })
-        
+
         # Sort by performance score
         performance_data.sort(key=lambda x: x['performance_score'], reverse=True)
-        
+
         return Response(performance_data)
+
+    def _calculate_supplier_response_time(self, supplier):
+        """Calculate average response time for a specific supplier"""
+        quotes = supplier.quotes.select_related('rfq').all()[:20]
+
+        if not quotes:
+            return 0
+
+        response_times = []
+        for quote in quotes:
+            if quote.rfq:
+                delta = (quote.created_at - quote.rfq.created_at).total_seconds() / 86400
+                response_times.append(delta)
+
+        return round(sum(response_times) / len(response_times), 1) if response_times else 0
     
     @action(detail=False, methods=['get'])
     def spending_analysis(self, request):
@@ -818,25 +875,42 @@ class ProcurementAnalyticsViewSet(viewsets.ViewSet):
     def savings_analysis(self, request):
         """Get cost savings analysis"""
         org = self.get_organization()
-        
+
         # Calculate savings from competitive bidding
         awarded_rfqs = RFQ.objects.filter(organization=org, status='awarded')
         total_savings = Decimal('0')
-        
+        total_highest = Decimal('0')
+        total_quote_count = 0
+        rfqs_with_quotes_count = 0
+
         for rfq in awarded_rfqs:
-            quotes = rfq.quotes.filter(status='submitted')
-            if quotes.count() > 1:
+            quotes = rfq.quotes.all()
+            quote_count = quotes.count()
+            total_quote_count += quote_count
+
+            if quote_count > 1:
+                rfqs_with_quotes_count += 1
                 lowest_quote = min(quotes, key=lambda q: q.total_amount)
                 highest_quote = max(quotes, key=lambda q: q.total_amount)
                 savings = highest_quote.total_amount - lowest_quote.total_amount
                 total_savings += savings
-        
+                total_highest += highest_quote.total_amount
+
+        # Calculate savings percentage (savings vs highest quote total)
+        savings_percentage = round(
+            (float(total_savings) / float(total_highest) * 100) if total_highest > 0 else 0, 1
+        )
+
+        # Calculate average quotes per RFQ
+        total_rfqs = awarded_rfqs.count()
+        avg_quotes_per_rfq = round(total_quote_count / total_rfqs, 1) if total_rfqs > 0 else 0
+
         return Response({
             'total_savings': total_savings,
-            'savings_percentage': 15.2,  # Placeholder
-            'average_savings_per_rfq': total_savings / max(awarded_rfqs.count(), 1),
+            'savings_percentage': savings_percentage,
+            'average_savings_per_rfq': total_savings / max(total_rfqs, 1),
             'competitive_bidding_impact': {
-                'rfqs_with_multiple_quotes': awarded_rfqs.count(),
-                'average_quotes_per_rfq': 3.2,  # Placeholder
+                'rfqs_with_multiple_quotes': rfqs_with_quotes_count,
+                'average_quotes_per_rfq': avg_quotes_per_rfq,
             }
         })

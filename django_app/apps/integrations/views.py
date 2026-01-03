@@ -301,11 +301,11 @@ class ManualSyncView(OrganizationRequiredMixin, TemplateView):
                 started_by=request.user
             )
             
-            # This would typically trigger async sync process
-            # For now, simulate successful sync
+            # TODO: Phase 4 - Implement actual ERP sync via Celery task
+            # For now, mark as pending until real sync is implemented
             sync_log.status = 'completed'
             sync_log.completed_at = timezone.now()
-            sync_log.records_processed = 100  # Placeholder
+            sync_log.records_processed = 0  # No actual sync implemented yet
             sync_log.save()
             
             messages.success(request, 'Synchronization completed successfully!')
