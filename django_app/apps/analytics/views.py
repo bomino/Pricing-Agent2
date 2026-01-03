@@ -564,6 +564,7 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
         """Generate spend analysis report data"""
         from apps.procurement.models import PurchaseOrder, Supplier
         from django.db.models import Sum, Count
+        from django.db.models.functions import TruncMonth
 
         # Get POs in date range
         pos = PurchaseOrder.objects.filter(
@@ -589,12 +590,18 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
             count=Count('id')
         ))
 
-        # Monthly trend
-        monthly_spend = list(pos.extra(
-            select={'month': "strftime('%%Y-%%m', created_at)"}
+        # Monthly trend - use TruncMonth for PostgreSQL compatibility
+        monthly_spend_qs = pos.annotate(
+            month=TruncMonth('created_at')
         ).values('month').annotate(
             total=Sum('total_amount')
-        ).order_by('month'))
+        ).order_by('month')
+
+        # Convert to list with formatted month strings
+        monthly_spend = [
+            {'month': item['month'].strftime('%Y-%m') if item['month'] else 'Unknown', 'total': item['total']}
+            for item in monthly_spend_qs
+        ]
 
         return {
             'report_title': 'Spend Analysis Report',
