@@ -497,6 +497,9 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
                 report_type, organization, period_start, period_end
             )
 
+            # Convert Decimal values to float for JSON serialization
+            summary_data = self._convert_decimals(summary_data)
+
             report.summary_data = summary_data
             report.total_records = summary_data.get('total_records', 0)
             report.status = 'completed'
@@ -542,6 +545,19 @@ class ReportGenerateView(OrganizationRequiredMixin, TemplateView):
             </div>
             '''
             return HttpResponse(html, status=500)
+
+    def _convert_decimals(self, obj):
+        """Recursively convert Decimal values to float for JSON serialization"""
+        from decimal import Decimal
+
+        if isinstance(obj, dict):
+            return {k: self._convert_decimals(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_decimals(item) for item in obj]
+        elif isinstance(obj, Decimal):
+            return float(obj)
+        else:
+            return obj
 
     def _generate_report_data(self, report_type, organization, period_start, period_end):
         """Generate report data based on report type"""
